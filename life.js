@@ -71,12 +71,14 @@ var World = /** @class */ (function () {
         //todo: move this chunk into 'tryAddAnimal()
         var col = rando(this.Columns);
         var row = rando(this.Rows);
-        return this.addAnimal(col, row);
+        var age = rando(100);
+        var initialEnergy = 100;
+        return this.addAnimal(col, row, age, initialEnergy);
     };
-    World.prototype.addAnimal = function (col, row) {
+    World.prototype.addAnimal = function (col, row, age, initialEnergy) {
         var cell = this.getCell(col, row);
         if (cell.Animal == null) {
-            var animal = new Animal(col, row, rando(100));
+            var animal = new Animal(col, row, age, initialEnergy);
             this.Animals.push(animal);
             cell.Animal = animal;
             return true;
@@ -158,7 +160,8 @@ function drawCell(world, cell) {
     ctx.stroke();
 }
 var Animal = /** @class */ (function () {
-    function Animal(col, row, age) {
+    function Animal(col, row, age, initialEnergy) {
+        this.MaxAge = 100;
         this.Alive = true;
         this.DeadDuration = 0; //if dead... how long have they been dead?
         this.MaxDeadDuration = 5; //how long does the body take to decompose
@@ -172,9 +175,8 @@ var Animal = /** @class */ (function () {
         this.Col = col;
         this.Row = row;
         this.Age = age;
-        this.MaxAge = 100;
-        this.Size = 1;
-        this.Energy = 100;
+        this.Size = 1; //baby size
+        this.Energy = initialEnergy;
         this.Id = newId();
     }
     Animal.prototype.takeTurn = function (world) {
@@ -251,9 +253,9 @@ var Animal = /** @class */ (function () {
         //TODO: suitors have their energy, but also: how much energy they advertise.
         var potentialMate = neighbors[0];
         //TODO: perform cross over of genes;
-        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row);
-        var child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
-        child.Energy = this.EnergyToChild;
+        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.EnergyToChild);
+        //let child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
+        //child.Energy = this.EnergyToChild;
         this.Energy -= this.EnergyToChild;
     };
     Animal.prototype.AdvertisedEnergy = function () {
@@ -298,6 +300,9 @@ function start2(randomize, worldWidth, worldHeight) {
 }
 function showStats() {
     var pop = world.Animals.length;
+    //todo: average energy
+    //todo: average of each gene.
+    //todo: ability to expand/collapse the stats.
     $id('stats').innerHTML = "pop: " + pop;
 }
 /* utility functions */

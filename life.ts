@@ -48,12 +48,14 @@ class World {
         //todo: move this chunk into 'tryAddAnimal()
         let col = rando(this.Columns);
         let row = rando(this.Rows);
-        return this.addAnimal(col, row);
+        let age = rando(100);
+        let initialEnergy = 100;
+        return this.addAnimal(col, row, age, initialEnergy);
     }
-    addAnimal(col:number, row:number):boolean {
+    addAnimal(col:number, row:number, age:number, initialEnergy:number):boolean {
         let cell = this.getCell(col, row);
         if (cell.Animal == null) {
-            var animal = new Animal(col, row, rando(100));
+            var animal = new Animal(col, row,age, initialEnergy);
             this.Animals.push(animal);
             cell.Animal = animal;
             return true;
@@ -258,9 +260,9 @@ class Animal {
         let potentialMate = neighbors[0];
         //TODO: perform cross over of genes;
 
-        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row);
-        let child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
-        child.Energy = this.EnergyToChild;
+        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.EnergyToChild);
+        //let child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
+        //child.Energy = this.EnergyToChild;
         this.Energy -= this.EnergyToChild;
     }
     AdvertisedEnergy() {
@@ -280,13 +282,12 @@ class Animal {
             this.DeadDuration = Math.min(this.MaxDeadDuration, this.DeadDuration+tickDuration);
         }
     }
-    constructor(col:number, row:number, age:number) {
+    constructor(col:number, row:number, age:number, initialEnergy:number) {
         this.Col = col;
         this.Row = row;
         this.Age = age;
-        this.MaxAge = 100;
-        this.Size = 1;
-        this.Energy = 100;
+        this.Size = 1; //baby size
+        this.Energy = initialEnergy; 
         this.Id = newId();
     }
     color():string {
@@ -302,7 +303,7 @@ class Animal {
     Row:number;
     Size:number;
     Age:number; //when age = maxage... they die.
-    MaxAge:number;
+    MaxAge:number = 100;
     Alive:boolean = true;
     DeadDuration:number = 0; //if dead... how long have they been dead?
     MaxDeadDuration:number = 5; //how long does the body take to decompose
