@@ -1,0 +1,3 @@
+get-date -f "yyyy-MM-dd HH:mm:ss";tsc life.ts;
+code .
+n index.html
