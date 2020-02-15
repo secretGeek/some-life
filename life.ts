@@ -1,11 +1,9 @@
-
 var canvas;
 var ctx;
 var world:World;
 
 //what size of an adult is a newborn baby? (e.g. 10% of adult size, then 0.1)
 //at what age are animals fullgrown?
-
 
 function draw2() {
     if (!world.Trails) ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -216,7 +214,7 @@ class Animal {
         }
 
         //eat some energy...
-        let munchAmount = this.MunchAmount;
+        let munchAmount = this.Genes[gene.MunchAmount];
         munchAmount = -1 * bestNeighbor.addEnergy(-1 * munchAmount);
         //console.log(`munch amount: ${munchAmount}`);
         this.Energy += munchAmount;
@@ -225,13 +223,13 @@ class Animal {
     }
 
     considerMating(cells:Cell[]) {
-        if (this.Age < this.AgeOfMaturity) return;
+        if (this.Age < this.Genes[gene.AgeOfMaturity]) return;
         
-        if (this.Energy < this.MinMatingEnergy) return;
-        if (this.Energy < this.EnergyToChild) return;
+        if (this.Energy < this.Genes[gene.MinMatingEnergy]) return;
+        if (this.Energy < this.Genes[gene.EnergyToChild]) return;
         //if their mating percent is 10%... then 90% of the time they'll exit here.
         
-        if (this.MatingPercent <= rando(100)) return;
+        if (this.Genes[gene.MatingPercent] <= rando(100)) return;
         //this means that 10% of the time, they are willing to consider mating.
         // whether or not they run into anyone... that's a different issue.
         
@@ -240,8 +238,8 @@ class Animal {
         for(let cell of cells){
             if (cell.Animal != null) {
                 // criteria to be a suitable mate:
-                if (cell.Animal.Age > cell.Animal.AgeOfMaturity
-                    && cell.Animal.AdvertisedEnergy() > this.MinimumAcceptableEnergyInaMate) {
+                if (cell.Animal.Age > cell.Animal.Genes[gene.AgeOfMaturity]
+                    && cell.Animal.AdvertisedEnergy() > this.Genes[gene.MinimumAcceptableEnergyInaMate]) {
                     neighbors.push(cell.Animal);
                 }
             } else {
@@ -260,10 +258,11 @@ class Animal {
         let potentialMate = neighbors[0];
         //TODO: perform cross over of genes;
 
-        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.EnergyToChild);
-        //let child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
+        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.Genes[gene.EnergyToChild]);
+        let child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
+        child.Genes = Crossover(this.Genes, potentialMate.Genes);
         //child.Energy = this.EnergyToChild;
-        this.Energy -= this.EnergyToChild;
+        this.Energy -= this.Genes[gene.EnergyToChild];
     }
     AdvertisedEnergy() {
         //todo: consider displaying a different amount of energy.
@@ -289,6 +288,15 @@ class Animal {
         this.Size = 1; //baby size
         this.Energy = initialEnergy; 
         this.Id = newId();
+        this.Genes = {
+            [gene.MatingPercent]: 3, // what percent of the time are you thinking about mating
+            [gene.MinMatingEnergy]: 70, //if less than this much energy, don't consider mating
+            [gene.EnergyToChild]:20, // how much energy does a child start with
+            [gene.MunchAmount]:25, //how much energy will they try to extract from the ground each chance they get
+            [gene.AgeOfMaturity]:10, //how old do they have to be before they can mate
+            [gene.MinimumAcceptableEnergyInaMate]:1 //a pulse will do
+        };
+        
     }
     color():string {
         if (!this.Alive) {
@@ -309,12 +317,9 @@ class Animal {
     MaxDeadDuration:number = 5; //how long does the body take to decompose
     Energy:number = 100;
     Id:number;
-    MatingPercent:number = 3; // what percent of the time are you thinking about mating
-    MinMatingEnergy: number = 70; //if less than this much energy, don't consider mating
-    EnergyToChild: number = 20; // how much energy does a child start with.
-    MunchAmount: number = 25; //how much energy will they try to extract from the ground each chance they get
-    AgeOfMaturity:number = 10; //how old do they have to be before they can mate
-    MinimumAcceptableEnergyInaMate: number = 1; //a pulse will do
+    Genes: EnumDictionary<gene, number>;
+    
+    //Genes: {[id: gene]: number};
 }
 
 function drawAnimal(world:World, animal:Animal) {
@@ -372,6 +377,49 @@ function $id(id: string): HTMLElement {
 }
   
 /* end utility */
+
+/* gene types */
+
+function Crossover(parent1Genes:EnumDictionary<gene, number>, parent2Genes:EnumDictionary<gene, number>):EnumDictionary<gene, number> {
+    //todo: return genes;
+    let newGenes = {
+        [gene.MatingPercent]: CombineGene(parent1Genes[gene.MatingPercent],parent2Genes[gene.MatingPercent]),
+        [gene.MinMatingEnergy]: CombineGene(parent1Genes[gene.MinMatingEnergy],parent2Genes[gene.MinMatingEnergy]),
+        [gene.EnergyToChild]: CombineGene(parent1Genes[gene.EnergyToChild],parent2Genes[gene.EnergyToChild]),
+        [gene.MunchAmount]: CombineGene(parent1Genes[gene.MunchAmount],parent2Genes[gene.MunchAmount]),
+        [gene.AgeOfMaturity]: CombineGene(parent1Genes[gene.AgeOfMaturity],parent2Genes[gene.AgeOfMaturity]),
+        [gene.MinimumAcceptableEnergyInaMate]: CombineGene(parent1Genes[gene.MinimumAcceptableEnergyInaMate],parent2Genes[gene.MinimumAcceptableEnergyInaMate]),        
+    };
+    return newGenes;
+}
+function CombineGene(gene1:number, gene2:number):number {
+    
+    let result = gene1;
+    let coin = rando(100);
+    if (coin<50) result = gene2;
+    let mutate = Math.min(rando(100),rando(100));
+    coin = rando(100);
+    if (coin<50) mutate *= -1;
+    mutate = mutate/100;
+    result += mutate;
+    if (result > 100) result = 100;
+    if (result < 0) result = 0;
+    return result;
+}
+
+type EnumDictionary<T extends string | symbol | number, U> = {
+    [K in T]: U;
+};
+
+enum gene {
+    MatingPercent = 1, // what percent of the time are you thinking about mating
+    MinMatingEnergy, //if less than this much energy, don't consider mating
+    EnergyToChild, // how much energy does a child start with.
+    MunchAmount, //how much energy will they try to extract from the ground each chance they get
+    AgeOfMaturity, //how old do they have to be before they can mate
+    MinimumAcceptableEnergyInaMate, //a pulse will do
+};
+/* end gene types */
 
 document.addEventListener("DOMContentLoaded", function () {
 	canvas = document.getElementById("html-canvas");

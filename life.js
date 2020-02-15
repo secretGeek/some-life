@@ -161,23 +161,27 @@ function drawCell(world, cell) {
 }
 var Animal = /** @class */ (function () {
     function Animal(col, row, age, initialEnergy) {
+        var _a;
         this.MaxAge = 100;
         this.Alive = true;
         this.DeadDuration = 0; //if dead... how long have they been dead?
         this.MaxDeadDuration = 5; //how long does the body take to decompose
         this.Energy = 100;
-        this.MatingPercent = 3; // what percent of the time are you thinking about mating
-        this.MinMatingEnergy = 70; //if less than this much energy, don't consider mating
-        this.EnergyToChild = 20; // how much energy does a child start with.
-        this.MunchAmount = 25; //how much energy will they try to extract from the ground each chance they get
-        this.AgeOfMaturity = 10; //how old do they have to be before they can mate
-        this.MinimumAcceptableEnergyInaMate = 1; //a pulse will do
         this.Col = col;
         this.Row = row;
         this.Age = age;
         this.Size = 1; //baby size
         this.Energy = initialEnergy;
         this.Id = newId();
+        this.Genes = (_a = {},
+            _a[gene.MatingPercent] = 3,
+            _a[gene.MinMatingEnergy] = 70,
+            _a[gene.EnergyToChild] = 20,
+            _a[gene.MunchAmount] = 25,
+            _a[gene.AgeOfMaturity] = 10,
+            _a[gene.MinimumAcceptableEnergyInaMate] = 1 //a pulse will do
+        ,
+            _a);
     }
     Animal.prototype.takeTurn = function (world) {
         if (!this.Alive)
@@ -211,21 +215,21 @@ var Animal = /** @class */ (function () {
             //console.log("Moved");
         }
         //eat some energy...
-        var munchAmount = this.MunchAmount;
+        var munchAmount = this.Genes[gene.MunchAmount];
         munchAmount = -1 * bestNeighbor.addEnergy(-1 * munchAmount);
         //console.log(`munch amount: ${munchAmount}`);
         this.Energy += munchAmount;
         this.considerMating(neighbors);
     };
     Animal.prototype.considerMating = function (cells) {
-        if (this.Age < this.AgeOfMaturity)
+        if (this.Age < this.Genes[gene.AgeOfMaturity])
             return;
-        if (this.Energy < this.MinMatingEnergy)
+        if (this.Energy < this.Genes[gene.MinMatingEnergy])
             return;
-        if (this.Energy < this.EnergyToChild)
+        if (this.Energy < this.Genes[gene.EnergyToChild])
             return;
         //if their mating percent is 10%... then 90% of the time they'll exit here.
-        if (this.MatingPercent <= rando(100))
+        if (this.Genes[gene.MatingPercent] <= rando(100))
             return;
         //this means that 10% of the time, they are willing to consider mating.
         // whether or not they run into anyone... that's a different issue.
@@ -235,8 +239,8 @@ var Animal = /** @class */ (function () {
             var cell = cells_1[_i];
             if (cell.Animal != null) {
                 // criteria to be a suitable mate:
-                if (cell.Animal.Age > cell.Animal.AgeOfMaturity
-                    && cell.Animal.AdvertisedEnergy() > this.MinimumAcceptableEnergyInaMate) {
+                if (cell.Animal.Age > cell.Animal.Genes[gene.AgeOfMaturity]
+                    && cell.Animal.AdvertisedEnergy() > this.Genes[gene.MinimumAcceptableEnergyInaMate]) {
                     neighbors.push(cell.Animal);
                 }
             }
@@ -253,10 +257,11 @@ var Animal = /** @class */ (function () {
         //TODO: suitors have their energy, but also: how much energy they advertise.
         var potentialMate = neighbors[0];
         //TODO: perform cross over of genes;
-        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.EnergyToChild);
-        //let child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
+        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.Genes[gene.EnergyToChild]);
+        var child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
+        child.Genes = Crossover(this.Genes, potentialMate.Genes);
         //child.Energy = this.EnergyToChild;
-        this.Energy -= this.EnergyToChild;
+        this.Energy -= this.Genes[gene.EnergyToChild];
     };
     Animal.prototype.AdvertisedEnergy = function () {
         //todo: consider displaying a different amount of energy.
@@ -334,6 +339,48 @@ function $id(id) {
     return document.getElementById(id);
 }
 /* end utility */
+/* gene types */
+function Crossover(parent1Genes, parent2Genes) {
+    var _a;
+    //todo: return genes;
+    var newGenes = (_a = {},
+        _a[gene.MatingPercent] = CombineGene(parent1Genes[gene.MatingPercent], parent2Genes[gene.MatingPercent]),
+        _a[gene.MinMatingEnergy] = CombineGene(parent1Genes[gene.MinMatingEnergy], parent2Genes[gene.MinMatingEnergy]),
+        _a[gene.EnergyToChild] = CombineGene(parent1Genes[gene.EnergyToChild], parent2Genes[gene.EnergyToChild]),
+        _a[gene.MunchAmount] = CombineGene(parent1Genes[gene.MunchAmount], parent2Genes[gene.MunchAmount]),
+        _a[gene.AgeOfMaturity] = CombineGene(parent1Genes[gene.AgeOfMaturity], parent2Genes[gene.AgeOfMaturity]),
+        _a[gene.MinimumAcceptableEnergyInaMate] = CombineGene(parent1Genes[gene.MinimumAcceptableEnergyInaMate], parent2Genes[gene.MinimumAcceptableEnergyInaMate]),
+        _a);
+    return newGenes;
+}
+function CombineGene(gene1, gene2) {
+    var result = gene1;
+    var coin = rando(100);
+    if (coin < 50)
+        result = gene2;
+    var mutate = Math.min(rando(100), rando(100));
+    coin = rando(100);
+    if (coin < 50)
+        mutate *= -1;
+    mutate = mutate / 100;
+    result += mutate;
+    if (result > 100)
+        result = 100;
+    if (result < 0)
+        result = 0;
+    return result;
+}
+var gene;
+(function (gene) {
+    gene[gene["MatingPercent"] = 1] = "MatingPercent";
+    gene[gene["MinMatingEnergy"] = 2] = "MinMatingEnergy";
+    gene[gene["EnergyToChild"] = 3] = "EnergyToChild";
+    gene[gene["MunchAmount"] = 4] = "MunchAmount";
+    gene[gene["AgeOfMaturity"] = 5] = "AgeOfMaturity";
+    gene[gene["MinimumAcceptableEnergyInaMate"] = 6] = "MinimumAcceptableEnergyInaMate";
+})(gene || (gene = {}));
+;
+/* end gene types */
 document.addEventListener("DOMContentLoaded", function () {
     canvas = document.getElementById("html-canvas");
     canvas.width = canvas.clientWidth;
