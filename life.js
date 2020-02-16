@@ -9,7 +9,7 @@ var SEASON_LENGTH = 20;
 var ALWAYS_SUMMER = false;
 var SUMMER = true;
 var season_day = 0; //how many days into the season are we?
-var ENERGY_RATE = 0.3; // how much energy does grass receive on each tick?
+var ENERGY_RATE = 1.1; // how much energy does grass receive on each tick?
 var ENERGY_UPSCALE_FACTOR = 7; //how much do we scale their genetic 'maxenergy' to find their true maximum energy.
 //this is a consequence of genes being limited between 0 and 100, but the practical range discovered experimentally being quite different
 var SEASONS_GET_LONGER = true;
