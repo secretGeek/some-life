@@ -11,7 +11,7 @@ const ALWAYS_SUMMER:boolean = false;
 let SUMMER:boolean = true;
 let season_day:number = 0; //how many days into the season are we?
 
-const ENERGY_RATE:number = 1.1; // how much energy does grass receive on each tick?
+const ENERGY_RATE:number = 3.1; // how much energy does grass receive on each tick?
 const ENERGY_UPSCALE_FACTOR:number = 7; //how much do we scale their genetic 'maxenergy' to find their true maximum energy.
 //this is a consequence of genes being limited between 0 and 100, but the practical range discovered experimentally being quite different
 
