@@ -23,9 +23,32 @@ canvas {
  max-width:100%;
  top:0;
  text-align:right;
+ margin-right:5px;
+}
+#grassGrowthRate {
+ position:absolute;
+ z-index:100;
+ left:0;
+ xmax-width:100%;
+ top:0;
+ text-align:right;
+ margin-right:5px;
+ font-size:20pt;
+}
+#up, #down{
+opacity:0.5;
+}
+#up:hover, #down:hover{
+ opacity:1;
+ text-shadow:0 0 3px #FFF;
+ cursor:pointer;
 }
 </style>
 <span id='stats'>pop:3</span>
+<span id='grassGrowthRate'>
+<span id='up' title='increase the rate that grass grows'>Up</span>
+<span id='down' title='decrease the rate that grass grows'>Down</span>
+</span>
 <canvas id="html-canvas">
 </body>
 <script src='life.js?3' type="text/javascript"></script>

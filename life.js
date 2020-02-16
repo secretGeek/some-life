@@ -1,15 +1,37 @@
 var canvas;
 var ctx;
 var world;
+var causeOfDeathNatural = [];
+var deathsToTrack = 100; //number of recent deaths to keep track of for stats reasons.
 //what size of an adult is a newborn baby? (e.g. 10% of adult size, then 0.1)
 //at what age are animals fullgrown?
+var SEASON_LENGTH = 20;
+var ALWAYS_SUMMER = false;
+var SUMMER = true;
+var season_day = 0; //how many days into the season are we?
+var ENERGY_RATE = 0.3; // how much energy does grass receive on each tick?
+var ENERGY_UPSCALE_FACTOR = 7; //how much do we scale their genetic 'maxenergy' to find their true maximum energy.
+//this is a consequence of genes being limited between 0 and 100, but the practical range discovered experimentally being quite different
+var SEASONS_GET_LONGER = true;
+var MUTATE_1 = 100;
+var MUTATE_2 = 100;
+var MUTATE_DIVISOR = 20;
 function draw2() {
     if (!world.Trails)
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     world.Tick++;
+    season_day++;
+    if (season_day == SEASON_LENGTH) {
+        SUMMER = !SUMMER;
+        //this causes a strange seasonal change I find intriguing...
+        if (SEASONS_GET_LONGER)
+            SEASON_LENGTH++;
+        season_day = 0;
+    }
     for (var _i = 0, _a = world.Cells; _i < _a.length; _i++) {
         var cell = _a[_i];
-        cell.addEnergy(world.EnergyRate);
+        if (ALWAYS_SUMMER || SUMMER)
+            cell.addEnergy(world.EnergyRate);
         drawCell(world, cell);
     }
     var deadHeap = [];
@@ -36,16 +58,19 @@ function draw2() {
     //while (world.Animals.length < world.StartingPopSize) {
     //    world.tryAddAnimal();
     //}
-    showStats();
-    requestAnimationFrame(draw2);
+    if (world.Pop != 0) {
+        showStats();
+        requestAnimationFrame(draw2);
+    }
 }
 var World = /** @class */ (function () {
     function World(columns, rows, canvasWidth, canvasHeight, startingPopSize) {
+        this.Pop = -1;
         this.Tick = 0;
         this.WidthOfCell = 20;
         this.HeightOfCell = 20;
         this.Trails = false;
-        this.EnergyRate = 0.1;
+        this.EnergyRate = ENERGY_RATE;
         this.TickDuration = 0.1;
         //TODO: calculate cell width/height
         this.Columns = columns;
@@ -70,7 +95,6 @@ var World = /** @class */ (function () {
         }
     }
     World.prototype.tryAddAnimal = function () {
-        //todo: move this chunk into 'tryAddAnimal()
         var col = rando(this.Columns);
         var row = rando(this.Rows);
         var age = rando(100);
@@ -181,8 +205,8 @@ var Animal = /** @class */ (function () {
             _a[gene.EnergyToChild] = 20,
             _a[gene.MunchAmount] = 25,
             _a[gene.AgeOfMaturity] = 10,
-            _a[gene.MinimumAcceptableEnergyInaMate] = 1 //a pulse will do
-        ,
+            _a[gene.MinimumAcceptableEnergyInaMate] = 1,
+            _a[gene.MaxEnergy] = 50,
             _a);
     }
     Animal.prototype.takeTurn = function (world) {
@@ -197,30 +221,60 @@ var Animal = /** @class */ (function () {
                 bestNeighbor = t;
             }
         }
-        //TODO: Only move to bestNeighbor if:
-        // bestNeighbor.Energy > this.Genes[hg.WorthMovingTo.ToString()]))
-        // AND deduct "moving" energy... 
+        //TODO: could have some strategy for when it's worth moving.
+        // could also have some strategy for moving even when it's not worth moving.
         // (if/when i have altitude -- the energy of moving will be based on altitude as well.)
-        currentTile.Animal = null;
-        bestNeighbor.Animal = this;
-        this.Col = bestNeighbor.Col;
-        this.Row = bestNeighbor.Row;
-        var movingEnergy = 7;
-        this.Energy -= movingEnergy;
-        //todo: standing still takes energy too.
-        if (this.Energy <= 0) {
-            console.log("Died of exhaustion.");
-            this.Alive = false;
-            return;
+        // energy taken to move depends on our current "mass" which is our stored energy.
+        var movingEnergy = (this.Energy / 40) + 3;
+        if (bestNeighbor.Energy > movingEnergy) {
+            currentTile.Animal = null;
+            bestNeighbor.Animal = this;
+            this.Col = bestNeighbor.Col;
+            this.Row = bestNeighbor.Row;
+            this.Energy -= movingEnergy;
+            //todo: standing still takes energy too.
+            if (this.Energy <= 0) {
+                console.log("Died of exhaustion.");
+                this.Alive = false;
+                causeOfDeathNatural.push(false);
+                while (causeOfDeathNatural.length > deathsToTrack)
+                    causeOfDeathNatural.splice(0, 1);
+                return;
+            }
+            else {
+                //console.log("Moved");
+            }
+            //eat some energy...
+            var munchAmount = this.Genes[gene.MunchAmount];
+            if (this.Energy + munchAmount > (this.Genes[gene.MaxEnergy] * ENERGY_UPSCALE_FACTOR)) {
+                // don't try to eat more than you can store!
+                munchAmount = (this.Genes[gene.MaxEnergy] * ENERGY_UPSCALE_FACTOR) - this.Energy;
+            }
+            //and you can't eat more than the cell can give you!
+            munchAmount = -1 * bestNeighbor.addEnergy(-1 * munchAmount);
+            //console.log(`munch amount: ${munchAmount}`);
+            this.Energy += munchAmount;
+            if (this.Energy > (this.Genes[gene.MaxEnergy] * ENERGY_UPSCALE_FACTOR)) {
+                console.log("I have more energy than I thought possible! munched:" + munchAmount + " new_energy:" + this.Energy + " max:" + this.Genes[gene.MaxEnergy]);
+            }
         }
         else {
-            //console.log("Moved");
+            //standing still...
+            //how much does that cost?
+            var standingStillEnergy = 3;
+            this.Energy -= standingStillEnergy;
+            if (this.Energy <= 0) {
+                console.log("Died of exhaustion.");
+                this.Alive = false;
+                causeOfDeathNatural.push(false);
+                while (causeOfDeathNatural.length > deathsToTrack)
+                    causeOfDeathNatural.splice(0, 1);
+                return;
+            }
+            else {
+                //console.log("Moved");
+            }
         }
-        //eat some energy...
-        var munchAmount = this.Genes[gene.MunchAmount];
-        munchAmount = -1 * bestNeighbor.addEnergy(-1 * munchAmount);
-        //console.log(`munch amount: ${munchAmount}`);
-        this.Energy += munchAmount;
         this.considerMating(neighbors);
     };
     Animal.prototype.considerMating = function (cells) {
@@ -241,7 +295,8 @@ var Animal = /** @class */ (function () {
             var cell = cells_1[_i];
             if (cell.Animal != null) {
                 // criteria to be a suitable mate:
-                if (cell.Animal.Age > cell.Animal.Genes[gene.AgeOfMaturity]
+                if (cell.Animal.Alive // picky
+                    && cell.Animal.Age > cell.Animal.Genes[gene.AgeOfMaturity]
                     && cell.Animal.AdvertisedEnergy() > this.Genes[gene.MinimumAcceptableEnergyInaMate]) {
                     neighbors.push(cell.Animal);
                 }
@@ -250,7 +305,10 @@ var Animal = /** @class */ (function () {
                 emptyCells.push(cell);
             }
         }
+        //slim pickins.
         if (neighbors.length == 0 || neighbors.length >= 8)
+            return;
+        if (emptyCells.length == 0)
             return;
         //there were no mating opportunities anyway.
         //TODO: only consider mating if the area is not overcrowded.
@@ -276,6 +334,9 @@ var Animal = /** @class */ (function () {
         if (this.Age >= this.MaxAge) {
             this.Alive = false;
             console.log("Died of old age.");
+            causeOfDeathNatural.push(true);
+            while (causeOfDeathNatural.length > deathsToTrack)
+                causeOfDeathNatural.splice(0, 1);
         }
         if (!this.Alive) {
             this.DeadDuration = Math.min(this.MaxDeadDuration, this.DeadDuration + tickDuration);
@@ -306,18 +367,21 @@ function start2(randomize, worldWidth, worldHeight) {
     world = new World(84, 40, worldWidth, worldHeight, 30);
 }
 var ss = "";
+var deaths = "";
 function showStats() {
     //let pop = world.Animals.length;
     //todo: average energy
     //todo: average of each gene.
     //todo: ability to expand/collapse the stats.
-    var averageGenes = [0, 0, 0, 0, 0, 0];
+    var averageGenes = [0, 0, 0, 0, 0, 0, 0];
     var pop = 0;
+    var averageEnergy = 0;
     for (var _i = 0, _a = world.Animals; _i < _a.length; _i++) {
         var a = _a[_i];
         if (a.Alive) {
             pop++;
-            if (world.Tick % 100 == 1) {
+            averageEnergy += a.Energy;
+            if (world.Tick % 50 == 1) {
                 for (var _b = 0, _c = Object.entries(a.Genes); _b < _c.length; _b++) {
                     var _d = _c[_b], key = _d[0], value = _d[1];
                     averageGenes[key] += value;
@@ -325,14 +389,29 @@ function showStats() {
             }
         }
     }
-    if (world.Tick % 100 == 1) {
+    if (world.Tick % 50 == 1) {
         ss = "";
         for (var k in averageGenes) {
             averageGenes[k] = averageGenes[k] / pop;
             ss += geneNames[k] + ": " + averageGenes[k].toFixed(3) + "<br />";
         }
+        if (causeOfDeathNatural.length > 0) {
+            var natural = 0;
+            for (var _e = 0, causeOfDeathNatural_1 = causeOfDeathNatural; _e < causeOfDeathNatural_1.length; _e++) {
+                var d = causeOfDeathNatural_1[_e];
+                if (d)
+                    natural++;
+            }
+            deaths = "deaths: " + ((natural / causeOfDeathNatural.length) * 100).toFixed(2) + "% natural";
+        }
     }
-    $id('stats').innerHTML = "pop: " + pop + "<br/>tick: " + world.Tick + "<br/>" + ss;
+    world.Pop = pop;
+    var season = "winter";
+    if (ALWAYS_SUMMER || SUMMER)
+        season = "summer";
+    if (!ALWAYS_SUMMER)
+        season += " (length: " + SEASON_LENGTH + ")";
+    $id('stats').innerHTML = "pop: " + pop + "<br/>tick: " + world.Tick + "<br/>world.EnergyRate: " + world.EnergyRate.toFixed(3) + "<br/>season: " + season + "<br/>" + deaths + "<br />avg energy: " + (averageEnergy / pop).toFixed(2) + "<br />" + ss;
 }
 /* utility functions */
 var id = 0;
@@ -374,20 +453,21 @@ function Crossover(parent1Genes, parent2Genes) {
         _a[gene.MunchAmount] = CombineGene(parent1Genes[gene.MunchAmount], parent2Genes[gene.MunchAmount]),
         _a[gene.AgeOfMaturity] = CombineGene(parent1Genes[gene.AgeOfMaturity], parent2Genes[gene.AgeOfMaturity]),
         _a[gene.MinimumAcceptableEnergyInaMate] = CombineGene(parent1Genes[gene.MinimumAcceptableEnergyInaMate], parent2Genes[gene.MinimumAcceptableEnergyInaMate]),
+        _a[gene.MaxEnergy] = CombineGene(parent1Genes[gene.MaxEnergy], parent2Genes[gene.MaxEnergy]),
         _a);
     return newGenes;
 }
-var geneNames = ["MatingPercent", "MinMatingEnergy", "EnergyToChild", "MunchAmount", "AgeOfMaturity", "MinimumAcceptableEnergyInaMate"];
+var geneNames = ["MatingPercent", "MinMatingEnergy", "EnergyToChild", "MunchAmount", "AgeOfMaturity", "MinimumAcceptableEnergyInaMate", "MaxEnergy"];
 function CombineGene(gene1, gene2) {
     var result = gene1;
     var coin = rando(100);
     if (coin < 50)
         result = gene2;
-    var mutate = Math.min(rando(100), rando(100));
+    var mutate = Math.min(rando(MUTATE_1), rando(MUTATE_2));
     coin = rando(100);
     if (coin < 50)
         mutate *= -1;
-    mutate = mutate / 100;
+    mutate = mutate / MUTATE_DIVISOR;
     result += mutate;
     if (result > 100)
         result = 100;
@@ -403,6 +483,7 @@ var gene;
     gene[gene["MunchAmount"] = 3] = "MunchAmount";
     gene[gene["AgeOfMaturity"] = 4] = "AgeOfMaturity";
     gene[gene["MinimumAcceptableEnergyInaMate"] = 5] = "MinimumAcceptableEnergyInaMate";
+    gene[gene["MaxEnergy"] = 6] = "MaxEnergy"; //the maximum amount of energy this creature will ever have.
 })(gene || (gene = {}));
 ;
 /* end gene types */
@@ -413,6 +494,14 @@ document.addEventListener("DOMContentLoaded", function () {
     ctx = canvas.getContext("2d");
     canvas.addEventListener('click', function () {
         world.getNeighborCells(5, 5);
+    }, false);
+    $id('up').addEventListener('click', function () {
+        //alert('up');
+        world.EnergyRate = world.EnergyRate * 1.05;
+    }, false);
+    $id('down').addEventListener('click', function () {
+        //alert('up');
+        world.EnergyRate = world.EnergyRate * 0.96;
     }, false);
     start2(true, canvas.width, canvas.height);
     draw2();
