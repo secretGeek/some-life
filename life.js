@@ -6,6 +6,7 @@ var world;
 function draw2() {
     if (!world.Trails)
         ctx.clearRect(0, 0, canvas.width, canvas.height);
+    world.Tick++;
     for (var _i = 0, _a = world.Cells; _i < _a.length; _i++) {
         var cell = _a[_i];
         cell.addEnergy(world.EnergyRate);
@@ -40,6 +41,7 @@ function draw2() {
 }
 var World = /** @class */ (function () {
     function World(columns, rows, canvasWidth, canvasHeight, startingPopSize) {
+        this.Tick = 0;
         this.WidthOfCell = 20;
         this.HeightOfCell = 20;
         this.Trails = false;
@@ -303,12 +305,34 @@ function drawAnimal(world, animal) {
 function start2(randomize, worldWidth, worldHeight) {
     world = new World(84, 40, worldWidth, worldHeight, 30);
 }
+var ss = "";
 function showStats() {
-    var pop = world.Animals.length;
+    //let pop = world.Animals.length;
     //todo: average energy
     //todo: average of each gene.
     //todo: ability to expand/collapse the stats.
-    $id('stats').innerHTML = "pop: " + pop;
+    var averageGenes = [0, 0, 0, 0, 0, 0];
+    var pop = 0;
+    for (var _i = 0, _a = world.Animals; _i < _a.length; _i++) {
+        var a = _a[_i];
+        if (a.Alive) {
+            pop++;
+            if (world.Tick % 100 == 1) {
+                for (var _b = 0, _c = Object.entries(a.Genes); _b < _c.length; _b++) {
+                    var _d = _c[_b], key = _d[0], value = _d[1];
+                    averageGenes[key] += value;
+                }
+            }
+        }
+    }
+    if (world.Tick % 100 == 1) {
+        ss = "";
+        for (var k in averageGenes) {
+            averageGenes[k] = averageGenes[k] / pop;
+            ss += geneNames[k] + ": " + averageGenes[k].toFixed(3) + "<br />";
+        }
+    }
+    $id('stats').innerHTML = "pop: " + pop + "<br/>tick: " + world.Tick + "<br/>" + ss;
 }
 /* utility functions */
 var id = 0;
@@ -353,6 +377,7 @@ function Crossover(parent1Genes, parent2Genes) {
         _a);
     return newGenes;
 }
+var geneNames = ["MatingPercent", "MinMatingEnergy", "EnergyToChild", "MunchAmount", "AgeOfMaturity", "MinimumAcceptableEnergyInaMate"];
 function CombineGene(gene1, gene2) {
     var result = gene1;
     var coin = rando(100);
@@ -372,12 +397,12 @@ function CombineGene(gene1, gene2) {
 }
 var gene;
 (function (gene) {
-    gene[gene["MatingPercent"] = 1] = "MatingPercent";
-    gene[gene["MinMatingEnergy"] = 2] = "MinMatingEnergy";
-    gene[gene["EnergyToChild"] = 3] = "EnergyToChild";
-    gene[gene["MunchAmount"] = 4] = "MunchAmount";
-    gene[gene["AgeOfMaturity"] = 5] = "AgeOfMaturity";
-    gene[gene["MinimumAcceptableEnergyInaMate"] = 6] = "MinimumAcceptableEnergyInaMate";
+    gene[gene["MatingPercent"] = 0] = "MatingPercent";
+    gene[gene["MinMatingEnergy"] = 1] = "MinMatingEnergy";
+    gene[gene["EnergyToChild"] = 2] = "EnergyToChild";
+    gene[gene["MunchAmount"] = 3] = "MunchAmount";
+    gene[gene["AgeOfMaturity"] = 4] = "AgeOfMaturity";
+    gene[gene["MinimumAcceptableEnergyInaMate"] = 5] = "MinimumAcceptableEnergyInaMate";
 })(gene || (gene = {}));
 ;
 /* end gene types */

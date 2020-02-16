@@ -7,6 +7,7 @@ var world:World;
 
 function draw2() {
     if (!world.Trails) ctx.clearRect(0, 0, canvas.width, canvas.height);
+    world.Tick++;
     for(let cell of world.Cells){
         cell.addEnergy(world.EnergyRate);
         drawCell(world, cell);
@@ -95,6 +96,7 @@ class World {
 
     }
     StartingPopSize:number;
+    Tick:number = 0;
     WidthOfCell:number = 20;
     HeightOfCell:number = 20;
     Columns:number;
@@ -339,12 +341,34 @@ function start2(randomize:boolean, worldWidth:number, worldHeight:number){
     world = new World(84, 40, worldWidth, worldHeight, 30);
 }
 
+let ss="";
 function showStats() {
-    let pop = world.Animals.length;
+    //let pop = world.Animals.length;
     //todo: average energy
     //todo: average of each gene.
     //todo: ability to expand/collapse the stats.
-    $id('stats').innerHTML = `pop: ${pop}`;   
+
+    let averageGenes:number[] = [0,0,0,0,0,0];
+    let pop = 0;
+    for(let a of world.Animals) {
+        if (a.Alive){
+            pop++;
+            if (world.Tick % 100 == 1) {
+                for (let [key, value] of Object.entries(a.Genes)) {
+                    averageGenes[key] += value;
+                }
+            }
+        }
+    }
+    if (world.Tick % 100 == 1){
+        ss = "";
+        for(let k in averageGenes){
+            averageGenes[k] = averageGenes[k]/pop;
+            ss += `${geneNames[k]}: ${averageGenes[k].toFixed(3)}<br />`;
+        }
+    }
+
+    $id('stats').innerHTML = `pop: ${pop}<br/>tick: ${world.Tick}<br/>${ss}`;   
 }
 /* utility functions */
 let id = 0;
@@ -390,8 +414,10 @@ function Crossover(parent1Genes:EnumDictionary<gene, number>, parent2Genes:EnumD
         [gene.AgeOfMaturity]: CombineGene(parent1Genes[gene.AgeOfMaturity],parent2Genes[gene.AgeOfMaturity]),
         [gene.MinimumAcceptableEnergyInaMate]: CombineGene(parent1Genes[gene.MinimumAcceptableEnergyInaMate],parent2Genes[gene.MinimumAcceptableEnergyInaMate]),        
     };
+    
     return newGenes;
 }
+var geneNames = ["MatingPercent","MinMatingEnergy","EnergyToChild","MunchAmount","AgeOfMaturity","MinimumAcceptableEnergyInaMate"]
 function CombineGene(gene1:number, gene2:number):number {
     
     let result = gene1;
@@ -412,7 +438,7 @@ type EnumDictionary<T extends string | symbol | number, U> = {
 };
 
 enum gene {
-    MatingPercent = 1, // what percent of the time are you thinking about mating
+    MatingPercent = 0, // what percent of the time are you thinking about mating
     MinMatingEnergy, //if less than this much energy, don't consider mating
     EnergyToChild, // how much energy does a child start with.
     MunchAmount, //how much energy will they try to extract from the ground each chance they get
