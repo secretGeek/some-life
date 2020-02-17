@@ -441,7 +441,7 @@ function showStats() {
         ss = "";
         for(let k in averageGenes){
             averageGenes[k] = averageGenes[k]/pop;
-            ss += `${geneNames[k]}: ${averageGenes[k].toFixed(3)} (${minGenes[k].toFixed(3)} - ${maxGenes[k].toFixed(3)})<br />`;
+            ss += `${toWords(geneNames[k])}: ${averageGenes[k].toFixed(3)} (${minGenes[k].toFixed(3)} - ${maxGenes[k].toFixed(3)})<br />`;
         }
 
         if (causeOfDeathNatural.length > 0) {
