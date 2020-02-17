@@ -43,13 +43,35 @@ opacity:0.5;
  text-shadow:0 0 3px #FFF;
  cursor:pointer;
 }
+.hidden,.startHidden {
+ display:none;
+}
+input[type=button]{
+ padding:20px;
+}
+form#form,#go {
+ margin:20px;
+}
+span.label {
+ display:inline-block;
+ min-width:300px;
+ text-align:right;
+ padding-right:20px;
+ min-height:30px;
+}
 </style>
-<span id='stats'>pop:3</span>
-<span id='grassGrowthRate'>
-<span id='up' title='increase the rate that grass grows'>Up</span>
-<span id='down' title='decrease the rate that grass grows'>Down</span>
+<span id='stats' class='startHidden'>pop:3</span>
+<span id='grassGrowthRate' class='startHidden'>
+<span id='up'  class='startHidden' title='increase the rate that grass grows'>Up</span>
+<span id='down'  class='startHidden' title='decrease the rate that grass grows'>Down</span>
 </span>
-<canvas id="html-canvas">
+<form id='form'>
+
+
+</form>
+<input type='button' id='go' value='GO'></input>
+
+<canvas id="html-canvas" class='startHidden'>
 </body>
 <script src='life.js?3' type="text/javascript"></script>
 </html>

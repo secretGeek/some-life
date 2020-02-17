@@ -1,3 +1,4 @@
+var _a;
 var canvas;
 var ctx;
 var world;
@@ -187,7 +188,6 @@ function drawCell(world, cell) {
 }
 var Animal = /** @class */ (function () {
     function Animal(col, row, age, initialEnergy) {
-        var _a;
         this.MaxAge = 100;
         this.Alive = true;
         this.DeadDuration = 0; //if dead... how long have they been dead?
@@ -199,15 +199,7 @@ var Animal = /** @class */ (function () {
         this.Size = 1; //baby size
         this.Energy = initialEnergy;
         this.Id = newId();
-        this.Genes = (_a = {},
-            _a[gene.MatingPercent] = 3,
-            _a[gene.MinMatingEnergy] = 70,
-            _a[gene.EnergyToChild] = 20,
-            _a[gene.MunchAmount] = 25,
-            _a[gene.AgeOfMaturity] = 10,
-            _a[gene.MinimumAcceptableEnergyInaMate] = 1,
-            _a[gene.MaxEnergy] = 50,
-            _a);
+        this.Genes = getDefaultGenes();
     }
     Animal.prototype.takeTurn = function (world) {
         if (!this.Alive)
@@ -234,8 +226,8 @@ var Animal = /** @class */ (function () {
             this.Energy -= movingEnergy;
             //todo: standing still takes energy too.
             if (this.Energy <= 0) {
-                console.log("Died of exhaustion.");
                 this.Alive = false;
+                //console.log("Died of exhaustion.");
                 causeOfDeathNatural.push(false);
                 while (causeOfDeathNatural.length > deathsToTrack)
                     causeOfDeathNatural.splice(0, 1);
@@ -264,8 +256,8 @@ var Animal = /** @class */ (function () {
             var standingStillEnergy = 3;
             this.Energy -= standingStillEnergy;
             if (this.Energy <= 0) {
-                console.log("Died of exhaustion.");
                 this.Alive = false;
+                //console.log("Died of exhaustion.");
                 causeOfDeathNatural.push(false);
                 while (causeOfDeathNatural.length > deathsToTrack)
                     causeOfDeathNatural.splice(0, 1);
@@ -297,7 +289,7 @@ var Animal = /** @class */ (function () {
                 // criteria to be a suitable mate:
                 if (cell.Animal.Alive // picky
                     && cell.Animal.Age > cell.Animal.Genes[gene.AgeOfMaturity]
-                    && cell.Animal.AdvertisedEnergy() > this.Genes[gene.MinimumAcceptableEnergyInaMate]) {
+                    && cell.Animal.AdvertisedEnergy() > this.Genes[gene.MinimumAcceptableEnergyInAMate]) {
                     neighbors.push(cell.Animal);
                 }
             }
@@ -333,7 +325,7 @@ var Animal = /** @class */ (function () {
         this.Size = this.Age / this.MaxAge;
         if (this.Age >= this.MaxAge) {
             this.Alive = false;
-            console.log("Died of old age.");
+            //console.log("Died of old age.");
             causeOfDeathNatural.push(true);
             while (causeOfDeathNatural.length > deathsToTrack)
                 causeOfDeathNatural.splice(0, 1);
@@ -363,6 +355,17 @@ function drawAnimal(world, animal) {
     ctx.fill();
     ctx.stroke();
 }
+function getDefaultGenes() {
+    return _defaultGenes; /*{
+        [gene.MatingPercent]: 3, // what percent of the time are you thinking about mating
+        [gene.MinMatingEnergy]: 70, //if less than this much energy, don't consider mating
+        [gene.EnergyToChild]:20, // how much energy does a child start with
+        [gene.MunchAmount]:25, //how much energy will they try to extract from the ground each chance they get
+        [gene.AgeOfMaturity]:10, //how old do they have to be before they can mate
+        [gene.MinimumAcceptableEnergyInAMate]:1, //a pulse will do
+        [gene.MaxEnergy]:50
+    };*/
+}
 function start2(randomize, worldWidth, worldHeight) {
     world = new World(84, 40, worldWidth, worldHeight, 30);
 }
@@ -374,6 +377,8 @@ function showStats() {
     //todo: average of each gene.
     //todo: ability to expand/collapse the stats.
     var averageGenes = [0, 0, 0, 0, 0, 0, 0];
+    var minGenes = [-1, -1, -1, -1, -1, -1, -1];
+    var maxGenes = [0, 0, 0, 0, 0, 0, 0];
     var pop = 0;
     var averageEnergy = 0;
     for (var _i = 0, _a = world.Animals; _i < _a.length; _i++) {
@@ -385,6 +390,10 @@ function showStats() {
                 for (var _b = 0, _c = Object.entries(a.Genes); _b < _c.length; _b++) {
                     var _d = _c[_b], key = _d[0], value = _d[1];
                     averageGenes[key] += value;
+                    if (minGenes[key] == -1 || value < minGenes[key])
+                        minGenes[key] = value;
+                    if (value > maxGenes[key])
+                        maxGenes[key] = value;
                 }
             }
         }
@@ -393,7 +402,7 @@ function showStats() {
         ss = "";
         for (var k in averageGenes) {
             averageGenes[k] = averageGenes[k] / pop;
-            ss += geneNames[k] + ": " + averageGenes[k].toFixed(3) + "<br />";
+            ss += geneNames[k] + ": " + averageGenes[k].toFixed(3) + " (" + minGenes[k].toFixed(3) + " - " + maxGenes[k].toFixed(3) + ")<br />";
         }
         if (causeOfDeathNatural.length > 0) {
             var natural = 0;
@@ -441,6 +450,30 @@ function $(selector) {
 function $id(id) {
     return document.getElementById(id);
 }
+//add the class of className to all elements that match the selector
+function addClass(selector, className) {
+    for (var _i = 0, _a = $(selector); _i < _a.length; _i++) {
+        var example = _a[_i];
+        example.classList.add(className);
+    }
+}
+//remove the class className from all elements that match the selector
+function removeClass(selector, className) {
+    for (var _i = 0, _a = $(selector); _i < _a.length; _i++) {
+        var example = _a[_i];
+        example.classList.remove(className);
+    }
+}
+// remove the class of className from all elements that have a class of className
+function removeAllClass(className) {
+    for (var _i = 0, _a = $("." + className); _i < _a.length; _i++) {
+        var example = _a[_i];
+        example.classList.remove(className);
+    }
+}
+function toWords(pascally) {
+    return pascally.replace(/([a-z])([A-Z])/gm, "$1 $2");
+}
 /* end utility */
 /* gene types */
 function Crossover(parent1Genes, parent2Genes) {
@@ -452,12 +485,12 @@ function Crossover(parent1Genes, parent2Genes) {
         _a[gene.EnergyToChild] = CombineGene(parent1Genes[gene.EnergyToChild], parent2Genes[gene.EnergyToChild]),
         _a[gene.MunchAmount] = CombineGene(parent1Genes[gene.MunchAmount], parent2Genes[gene.MunchAmount]),
         _a[gene.AgeOfMaturity] = CombineGene(parent1Genes[gene.AgeOfMaturity], parent2Genes[gene.AgeOfMaturity]),
-        _a[gene.MinimumAcceptableEnergyInaMate] = CombineGene(parent1Genes[gene.MinimumAcceptableEnergyInaMate], parent2Genes[gene.MinimumAcceptableEnergyInaMate]),
+        _a[gene.MinimumAcceptableEnergyInAMate] = CombineGene(parent1Genes[gene.MinimumAcceptableEnergyInAMate], parent2Genes[gene.MinimumAcceptableEnergyInAMate]),
         _a[gene.MaxEnergy] = CombineGene(parent1Genes[gene.MaxEnergy], parent2Genes[gene.MaxEnergy]),
         _a);
     return newGenes;
 }
-var geneNames = ["MatingPercent", "MinMatingEnergy", "EnergyToChild", "MunchAmount", "AgeOfMaturity", "MinimumAcceptableEnergyInaMate", "MaxEnergy"];
+var geneNames = ["MatingPercent", "MinMatingEnergy", "EnergyToChild", "MunchAmount", "AgeOfMaturity", "MinimumAcceptableEnergyInAMate", "MaxEnergy"];
 function CombineGene(gene1, gene2) {
     var result = gene1;
     var coin = rando(100);
@@ -482,27 +515,62 @@ var gene;
     gene[gene["EnergyToChild"] = 2] = "EnergyToChild";
     gene[gene["MunchAmount"] = 3] = "MunchAmount";
     gene[gene["AgeOfMaturity"] = 4] = "AgeOfMaturity";
-    gene[gene["MinimumAcceptableEnergyInaMate"] = 5] = "MinimumAcceptableEnergyInaMate";
+    gene[gene["MinimumAcceptableEnergyInAMate"] = 5] = "MinimumAcceptableEnergyInAMate";
     gene[gene["MaxEnergy"] = 6] = "MaxEnergy"; //the maximum amount of energy this creature will ever have.
 })(gene || (gene = {}));
 ;
+var _defaultGenes = (_a = {},
+    _a[gene.MatingPercent] = 3,
+    _a[gene.MinMatingEnergy] = 70,
+    _a[gene.EnergyToChild] = 20,
+    _a[gene.MunchAmount] = 25,
+    _a[gene.AgeOfMaturity] = 10,
+    _a[gene.MinimumAcceptableEnergyInAMate] = 1,
+    _a[gene.MaxEnergy] = 50,
+    _a);
 /* end gene types */
+function populateForm(id) {
+    var genes = getDefaultGenes();
+    var ss = "<h1>Default (starting) gene values</h1><br />";
+    for (var _i = 0, _a = Object.entries(genes); _i < _a.length; _i++) {
+        var _b = _a[_i], key = _b[0], value = _b[1];
+        ss += "<span class='label'>" + toWords(geneNames[key]) + "</span><input type='text' id='" + geneNames[key] + "' value='" + value + "' /><br />";
+    }
+    $id(id).innerHTML = ss;
+}
+function readForm(id) {
+    var ss = "";
+    //Updates the default genes!
+    for (var _i = 0, _a = Object.entries(_defaultGenes); _i < _a.length; _i++) {
+        var _b = _a[_i], key = _b[0], value = _b[1];
+        _defaultGenes[key] = parseFloat($id(geneNames[key]).value);
+        ss += "_defaultGenes[" + key + "] = parseFloat((<HTMLInputElement>$id('" + geneNames[key] + "')).value); //" + parseFloat($id(geneNames[key]).value) + "\r\n";
+    }
+    console.log(ss);
+}
 document.addEventListener("DOMContentLoaded", function () {
-    canvas = document.getElementById("html-canvas");
-    canvas.width = canvas.clientWidth;
-    canvas.height = canvas.clientHeight;
-    ctx = canvas.getContext("2d");
-    canvas.addEventListener('click', function () {
-        world.getNeighborCells(5, 5);
-    }, false);
-    $id('up').addEventListener('click', function () {
-        //alert('up');
-        world.EnergyRate = world.EnergyRate * 1.05;
-    }, false);
-    $id('down').addEventListener('click', function () {
-        //alert('up');
-        world.EnergyRate = world.EnergyRate * 0.96;
-    }, false);
-    start2(true, canvas.width, canvas.height);
-    draw2();
+    populateForm('form');
+    $id('go').addEventListener('click', function () {
+        readForm('form');
+        removeClass('.startHidden', 'startHidden');
+        $id('form').classList.add('hidden');
+        $id('go').classList.add('hidden');
+        canvas = document.getElementById("html-canvas");
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        ctx = canvas.getContext("2d");
+        canvas.addEventListener('click', function () {
+            world.getNeighborCells(5, 5);
+        }, false);
+        $id('up').addEventListener('click', function () {
+            //alert('up');
+            world.EnergyRate = world.EnergyRate * 1.05;
+        }, false);
+        $id('down').addEventListener('click', function () {
+            //alert('up');
+            world.EnergyRate = world.EnergyRate * 0.96;
+        }, false);
+        start2(true, canvas.width, canvas.height);
+        draw2();
+    });
 }, false);

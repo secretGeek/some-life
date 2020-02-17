@@ -240,8 +240,8 @@ class Animal {
             this.Energy -= movingEnergy;
             //todo: standing still takes energy too.
             if (this.Energy <= 0){
-                console.log("Died of exhaustion.");
                 this.Alive = false;
+                //console.log("Died of exhaustion.");
                 causeOfDeathNatural.push(false);
                 while(causeOfDeathNatural.length > deathsToTrack) causeOfDeathNatural.splice(0,1);
                 return;
@@ -271,8 +271,8 @@ class Animal {
             let standingStillEnergy = 3;
             this.Energy -= standingStillEnergy;
             if (this.Energy <= 0){
-                console.log("Died of exhaustion.");
                 this.Alive = false;
+                //console.log("Died of exhaustion.");
                 causeOfDeathNatural.push(false);
                 while(causeOfDeathNatural.length > deathsToTrack) causeOfDeathNatural.splice(0,1);
                 return;
@@ -302,7 +302,7 @@ class Animal {
                 // criteria to be a suitable mate:
                 if (cell.Animal.Alive  // picky
                     && cell.Animal.Age > cell.Animal.Genes[gene.AgeOfMaturity]
-                    && cell.Animal.AdvertisedEnergy() > this.Genes[gene.MinimumAcceptableEnergyInaMate]) {
+                    && cell.Animal.AdvertisedEnergy() > this.Genes[gene.MinimumAcceptableEnergyInAMate]) {
                     neighbors.push(cell.Animal);
                 }
             } else {
@@ -340,7 +340,7 @@ class Animal {
         this.Size = this.Age / this.MaxAge;
         if (this.Age >= this.MaxAge) {
             this.Alive = false;
-            console.log("Died of old age.");
+            //console.log("Died of old age.");
             causeOfDeathNatural.push(true);
             while(causeOfDeathNatural.length > deathsToTrack) causeOfDeathNatural.splice(0,1);
         }
@@ -355,15 +355,7 @@ class Animal {
         this.Size = 1; //baby size
         this.Energy = initialEnergy; 
         this.Id = newId();
-        this.Genes = {
-            [gene.MatingPercent]: 3, // what percent of the time are you thinking about mating
-            [gene.MinMatingEnergy]: 70, //if less than this much energy, don't consider mating
-            [gene.EnergyToChild]:20, // how much energy does a child start with
-            [gene.MunchAmount]:25, //how much energy will they try to extract from the ground each chance they get
-            [gene.AgeOfMaturity]:10, //how old do they have to be before they can mate
-            [gene.MinimumAcceptableEnergyInaMate]:1, //a pulse will do
-            [gene.MaxEnergy]:50
-        };
+        this.Genes = getDefaultGenes();
         
     }
     color():string {
@@ -403,6 +395,18 @@ function drawAnimal(world:World, animal:Animal) {
     ctx.stroke();
 }
 
+function getDefaultGenes():EnumDictionary<gene, number> {
+    return _defaultGenes; /*{
+        [gene.MatingPercent]: 3, // what percent of the time are you thinking about mating
+        [gene.MinMatingEnergy]: 70, //if less than this much energy, don't consider mating
+        [gene.EnergyToChild]:20, // how much energy does a child start with
+        [gene.MunchAmount]:25, //how much energy will they try to extract from the ground each chance they get
+        [gene.AgeOfMaturity]:10, //how old do they have to be before they can mate
+        [gene.MinimumAcceptableEnergyInAMate]:1, //a pulse will do
+        [gene.MaxEnergy]:50
+    };*/
+}
+
 function start2(randomize:boolean, worldWidth:number, worldHeight:number){
     world = new World(84, 40, worldWidth, worldHeight, 30);
 }
@@ -416,6 +420,8 @@ function showStats() {
     //todo: ability to expand/collapse the stats.
 
     let averageGenes:number[] = [0,0,0,0,0,0,0];
+    let minGenes:number[] = [-1,-1,-1,-1,-1,-1,-1];
+    let maxGenes:number[] = [0,0,0,0,0,0,0];
     let pop = 0;
     let averageEnergy:number = 0;
     for(let a of world.Animals) {
@@ -425,6 +431,8 @@ function showStats() {
             if (world.Tick % 50 == 1) {
                 for (let [key, value] of Object.entries(a.Genes)) {
                     averageGenes[key] += value;
+                    if (minGenes[key] == -1 || value < minGenes[key]) minGenes[key] = value;
+                    if (value > maxGenes[key]) maxGenes[key] = value;
                 }
             }
         }
@@ -433,7 +441,7 @@ function showStats() {
         ss = "";
         for(let k in averageGenes){
             averageGenes[k] = averageGenes[k]/pop;
-            ss += `${geneNames[k]}: ${averageGenes[k].toFixed(3)}<br />`;
+            ss += `${geneNames[k]}: ${averageGenes[k].toFixed(3)} (${minGenes[k].toFixed(3)} - ${maxGenes[k].toFixed(3)})<br />`;
         }
 
         if (causeOfDeathNatural.length > 0) {
@@ -482,7 +490,31 @@ function $(selector: string): HTMLElement[] {
 function $id(id: string): HTMLElement {
     return document.getElementById(id);
 }
+
+//add the class of className to all elements that match the selector
+function addClass(selector: string, className: string) {
+    for(const example of $(selector)) {
+      example.classList.add(className);
+    }
+  }
   
+  //remove the class className from all elements that match the selector
+  function removeClass(selector: string, className: string) {
+    for(const example of $(selector)) {
+      example.classList.remove(className);
+    }
+  }
+  
+// remove the class of className from all elements that have a class of className
+function removeAllClass(className: string) {
+    for(const example of $("." + className)) {
+        example.classList.remove(className);
+    }
+}
+  
+function toWords(pascally:string) {
+    return pascally.replace(/([a-z])([A-Z])/gm, "$1 $2");
+}
 /* end utility */
 
 /* gene types */
@@ -495,13 +527,13 @@ function Crossover(parent1Genes:EnumDictionary<gene, number>, parent2Genes:EnumD
         [gene.EnergyToChild]: CombineGene(parent1Genes[gene.EnergyToChild],parent2Genes[gene.EnergyToChild]),
         [gene.MunchAmount]: CombineGene(parent1Genes[gene.MunchAmount],parent2Genes[gene.MunchAmount]),
         [gene.AgeOfMaturity]: CombineGene(parent1Genes[gene.AgeOfMaturity],parent2Genes[gene.AgeOfMaturity]),
-        [gene.MinimumAcceptableEnergyInaMate]: CombineGene(parent1Genes[gene.MinimumAcceptableEnergyInaMate],parent2Genes[gene.MinimumAcceptableEnergyInaMate]),        
+        [gene.MinimumAcceptableEnergyInAMate]: CombineGene(parent1Genes[gene.MinimumAcceptableEnergyInAMate],parent2Genes[gene.MinimumAcceptableEnergyInAMate]),        
         [gene.MaxEnergy]: CombineGene(parent1Genes[gene.MaxEnergy],parent2Genes[gene.MaxEnergy]),
     };
     
     return newGenes;
 }
-var geneNames = ["MatingPercent","MinMatingEnergy","EnergyToChild","MunchAmount","AgeOfMaturity","MinimumAcceptableEnergyInaMate","MaxEnergy"]
+var geneNames = ["MatingPercent","MinMatingEnergy","EnergyToChild","MunchAmount","AgeOfMaturity","MinimumAcceptableEnergyInAMate","MaxEnergy"]
 function CombineGene(gene1:number, gene2:number):number {
     
     let result = gene1;
@@ -528,28 +560,72 @@ enum gene {
     EnergyToChild, // how much energy does a child start with.
     MunchAmount, //how much energy will they try to extract from the ground each chance they get
     AgeOfMaturity, //how old do they have to be before they can mate
-    MinimumAcceptableEnergyInaMate, //a pulse will do
+    MinimumAcceptableEnergyInAMate, //a pulse will do
     MaxEnergy //the maximum amount of energy this creature will ever have.
 };
+
+let _defaultGenes:EnumDictionary<gene, number> = {
+    [gene.MatingPercent]: 3, // what percent of the time are you thinking about mating
+    [gene.MinMatingEnergy]: 70, //if less than this much energy, don't consider mating
+    [gene.EnergyToChild]:20, // how much energy does a child start with
+    [gene.MunchAmount]:25, //how much energy will they try to extract from the ground each chance they get
+    [gene.AgeOfMaturity]:10, //how old do they have to be before they can mate
+    [gene.MinimumAcceptableEnergyInAMate]:1, //a pulse will do
+    [gene.MaxEnergy]:50
+};
+
 /* end gene types */
 
-document.addEventListener("DOMContentLoaded", function () {
-	canvas = document.getElementById("html-canvas");
-	canvas.width = canvas.clientWidth;
-	canvas.height = canvas.clientHeight;
-    ctx = canvas.getContext("2d");
-    canvas.addEventListener('click', function() { 
-        world.getNeighborCells(5,5);
-    }, false);
-    $id('up').addEventListener('click', function() { 
-        //alert('up');
-        world.EnergyRate = world.EnergyRate * 1.05;
-    }, false);
-    $id('down').addEventListener('click', function() { 
-        //alert('up');
-        world.EnergyRate = world.EnergyRate * 0.96;
-    }, false);
+function populateForm(id:string){
+    var genes = getDefaultGenes();
+    var ss = "<h1>Default (starting) gene values</h1><br />";
 
-	start2(true, canvas.width, canvas.height);
-	draw2();
+    for (let [key, value] of Object.entries(genes)) {
+        ss+=`<span class='label'>${toWords(geneNames[key])}</span><input type='text' id='${geneNames[key]}' value='${value}' /><br />`;
+    }
+
+    $id(id).innerHTML = ss;
+}
+
+function readForm(id:string){
+    var ss = "";
+
+    //Updates the default genes!
+    for (let [key, value] of Object.entries(_defaultGenes)) {
+        
+        _defaultGenes[key] = parseFloat((<HTMLInputElement>$id(geneNames[key])).value);
+        ss+=`_defaultGenes[${key}] = parseFloat((<HTMLInputElement>$id('${geneNames[key]}')).value); //${parseFloat((<HTMLInputElement>$id(geneNames[key])).value)}\r\n`;
+    }
+    console.log(ss);
+}
+
+document.addEventListener("DOMContentLoaded", function () {
+    populateForm('form');
+    
+    $id('go').addEventListener('click', function() {
+
+        readForm('form');
+        removeClass('.startHidden', 'startHidden');
+        $id('form').classList.add('hidden');
+        $id('go').classList.add('hidden');
+
+        canvas = document.getElementById("html-canvas");
+        canvas.width = canvas.clientWidth;
+        canvas.height = canvas.clientHeight;
+        ctx = canvas.getContext("2d");
+        canvas.addEventListener('click', function() { 
+            world.getNeighborCells(5,5);
+        }, false);
+        $id('up').addEventListener('click', function() { 
+            //alert('up');
+            world.EnergyRate = world.EnergyRate * 1.05;
+        }, false);
+        $id('down').addEventListener('click', function() { 
+            //alert('up');
+            world.EnergyRate = world.EnergyRate * 0.96;
+        }, false);
+
+        start2(true, canvas.width, canvas.height);
+        draw2();
+    });
 }, false);
