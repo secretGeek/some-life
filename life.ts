@@ -2,41 +2,45 @@ var canvas;
 var ctx;
 var world:World;
 var causeOfDeathNatural:boolean[] = [];
+
 var deathsToTrack:number = 100; //number of recent deaths to keep track of for stats reasons.
 //what size of an adult is a newborn baby? (e.g. 10% of adult size, then 0.1)
 //at what age are animals fullgrown?
 
-let SEASON_LENGTH:number = 20;
-const ALWAYS_SUMMER:boolean = false;
+//let SEASON_LENGTH:number = 20;
+//const ALWAYS_SUMMER:boolean = false;
 let SUMMER:boolean = true;
 let season_day:number = 0; //how many days into the season are we?
 
-const ENERGY_RATE:number = 3.1; // how much energy does grass receive on each tick?
-const ENERGY_UPSCALE_FACTOR:number = 7; //how much do we scale their genetic 'maxenergy' to find their true maximum energy.
+//const ENERGY_RATE:number = 3.1; // how much energy does grass receive on each tick?
+//const TICK_DURATION:number = 0.1; //how many 'years' go by for every tick. (age is specified in years, not ticks.)
+//const ENERGY_UPSCALE_FACTOR:number = 7; //how much do we scale their genetic 'maxenergy' to find their true maximum energy.
 //this is a consequence of genes being limited between 0 and 100, but the practical range discovered experimentally being quite different
 
-const SEASONS_GET_LONGER:boolean = true;
+//const SEASONS_GET_LONGER:boolean = true;
+//const MUTATE_1 = 100;
+//const MUTATE_2 = 100;
+//const MUTATE_DIVISOR = 20;
+//how many milliseconds to wait between rendering each frame
+//let DELAY:number = 0;
 
-const MUTATE_1 = 100;
-const MUTATE_2 = 100;
-const MUTATE_DIVISOR = 20;
 
 function draw2() {
     if (!world.Trails) ctx.clearRect(0, 0, canvas.width, canvas.height);
     world.Tick++;
 
     season_day++;
-    if (season_day == SEASON_LENGTH) {
+    if (season_day == world.Settings.SeasonLength) {
         SUMMER = !SUMMER;
 
         //this causes a strange seasonal change I find intriguing...
-        if (SEASONS_GET_LONGER) SEASON_LENGTH++;
+        if (world.Settings.DoSeasonsGetLonger) world.Settings.SeasonLength++;
 
         season_day = 0;
     }
 
     for(let cell of world.Cells){
-        if (ALWAYS_SUMMER || SUMMER) cell.addEnergy(world.EnergyRate);
+        if (world.Settings.IsAlwaysSummer || SUMMER) cell.addEnergy(world.Settings.EnergyRate);
         drawCell(world, cell);
     }
     
@@ -44,7 +48,7 @@ function draw2() {
     let deadHeap:Animal[] = [];
     for(let animal of world.Animals) {
         animal.takeTurn(world);
-        animal.addAge(world.TickDuration);
+        animal.addAge(world.Settings.TickDuration);
         if (!animal.Alive && animal.DeadDuration >= animal.MaxDeadDuration ) {
             deadHeap.push(animal);
         } else {
@@ -68,15 +72,19 @@ function draw2() {
     
     if (world.Pop != 0 ) {
         showStats();
-        requestAnimationFrame(draw2);
+        if (world.Settings.Delay==0){
+            requestAnimationFrame(draw2);
+        } else {
+            setTimeout(function(){ requestAnimationFrame(draw2); }, world.Settings.Delay);
+        }
     }
 }
-
 class World {
     Pop: number = -1;
+    Settings:Settings = new Settings();
     tryAddAnimal():boolean {
-        let col = rando(this.Columns);
-        let row = rando(this.Rows);
+        let col = rando(this.Settings.Columns);
+        let row = rando(this.Settings.Rows);
         let age = rando(100);
         let initialEnergy = 100;
         return this.addAnimal(col, row, age, initialEnergy);
@@ -94,75 +102,74 @@ class World {
         }
     }
     constructor(
-        columns:number,
-        rows:number,
         canvasWidth:number,
         canvasHeight:number,
-        startingPopSize:number
     ) {
-        //TODO: calculate cell width/height
-        this.Columns = columns;
-        this.Rows = rows;
         this.CanvasWidth = canvasWidth;
         this.CanvasHeight = canvasHeight;
+    }
+    initialize() {
         this.Cells = [];
-        this.StartingPopSize = startingPopSize;
-        this.WidthOfCell = canvasWidth / columns;
-        this.HeightOfCell = this.CanvasHeight / rows;
-        for(let row=0; row < this.Rows; row++){
-            for(let col=0; col< this.Columns; col++){
+        this.WidthOfCell = this.CanvasWidth / this.Settings.Columns;
+        this.HeightOfCell = this.CanvasHeight / this.Settings.Rows;
+        for(let row=0; row < this.Settings.Rows; row++){
+            for(let col=0; col< this.Settings.Columns; col++){
                 let cell = new Cell(col, row);
-
                 this.Cells.push(cell);
             }
         }
-        console.log("For squarer cells, keep #rows and set cols to: " + ((canvasWidth / canvasHeight) * rows) );
-        console.log("...or keep # cols and set rows to: " + ((canvasHeight/canvasWidth) * columns));
+        console.log("For squarer cells, keep #rows and set cols to: " + ((this.CanvasWidth / this.CanvasHeight) * this.Settings.Rows) );
+        console.log("...or keep # cols and set rows to: " + ((this.CanvasHeight/this.CanvasWidth) * this.Settings.Columns));
         this.Animals = [];
     
-        while (this.Animals.length < this.StartingPopSize) {
+        while (this.Animals.length < this.Settings.StartingPopulationSize) {
             this.tryAddAnimal();
         }
+        console.log(this);
     }
-    StartingPopSize:number;
+
+    //StartingPopSize:number;
     Tick:number = 0;
-    WidthOfCell:number = 20;
-    HeightOfCell:number = 20;
-    Columns:number;
-    Rows:number;
+    WidthOfCell:number;
+    HeightOfCell:number;
+    //Columns:number;
+    //Rows:number;
     CanvasWidth:number;
     CanvasHeight:number;
     Cells:Cell[];
     Animals:Animal[];
     Trails:boolean = false;
-    EnergyRate:number = ENERGY_RATE;
-    TickDuration:number = 0.1;
+    //EnergyRate:number = ENERGY_RATE;
+    //TickDuration:number = TICK_DURATION;
     getCell(col:number, row:number):Cell {
-        return this.Cells[col + (row*this.Columns)];
+        return this.Cells[col + (row*this.Settings.Columns)];
     }
+
+    //get the 8 cells that surround this cell -- return them in random order.
     getNeighborCells(col:number, row:number):Cell[] {
         let result:Cell[] = [];
+        //TODO: a neighborhood could be a larger area, consider 3x3, 5x5, 7x7... 
         for (let i:number = 0; i < 3; i++)
         {
             for (let j:number = 0; j < 3; j++)
             {
-                let offsetX = i - 1;
-                let offsetY = j - 1;
+                let offsetX = i - 1; //minus (side-1)/2, e.g. side defaults to 3, but could 5,7,9
+                let offsetY = j - 1; //minus (side-1)/2
                 let newX = col + offsetX;
                 let newY = row + offsetY;
-                if (newX < 0) newX = this.Columns - 1;
-                if (newY < 0) newY = this.Rows - 1;
-                if (newX >= this.Columns) newX = 0;
-                if (newY >= this.Rows) newY = 0;
+                if (newX < 0) newX = this.Settings.Columns + newX; //wrap...
+                if (newY < 0) newY = this.Settings.Rows + newY; //...around!
+                if (newX >= this.Settings.Columns) newX = this.Settings.Columns - newX;
+                if (newY >= this.Settings.Rows) newY = this.Settings.Rows - newY;
                 if (offsetX != 0 || offsetY != 0) // ignore current tile...
                 {
                     //console.log(`newX, newY: ${newX}, ${newY} -- is cell number... ${newX + (newY*this.Columns)}`)
                     var cell = this.getCell(newX, newY);//this.Cells[newX + (newY*this.Columns)];
-                    if (cell.Col == newX && cell.Row == newY) {
-                        //console.log("As expected...");
-                    } else {
-                        //console.log(`Expected: col,row: ${newX}, ${newY}, found: ${cell.Col},${cell.Row}`);
-                    }
+                    //if (cell.Col == newX && cell.Row == newY) {
+                    //    //console.log("As expected...");
+                    //} else {
+                    //    //console.log(`Expected: col,row: ${newX}, ${newY}, found: ${cell.Col},${cell.Row}`);
+                    //}
                     result.push(cell);
                 }
             }
@@ -251,9 +258,9 @@ class Animal {
 
             //eat some energy...
             let munchAmount = this.Genes[gene.MunchAmount];
-            if (this.Energy + munchAmount > (this.Genes[gene.MaxEnergy]*ENERGY_UPSCALE_FACTOR)){
+            if (this.Energy + munchAmount > (this.Genes[gene.MaxEnergy]*world.Settings.EnergyUpscaleFactor)){
                 // don't try to eat more than you can store!
-                munchAmount = (this.Genes[gene.MaxEnergy]*ENERGY_UPSCALE_FACTOR) - this.Energy;
+                munchAmount = (this.Genes[gene.MaxEnergy]*world.Settings.EnergyUpscaleFactor) - this.Energy;
             }
 
             //and you can't eat more than the cell can give you!
@@ -262,7 +269,7 @@ class Animal {
             //console.log(`munch amount: ${munchAmount}`);
             this.Energy += munchAmount;
 
-            if (this.Energy > (this.Genes[gene.MaxEnergy]*ENERGY_UPSCALE_FACTOR)) {
+            if (this.Energy > (this.Genes[gene.MaxEnergy]*world.Settings.EnergyUpscaleFactor)) {
                 console.log(`I have more energy than I thought possible! munched:${munchAmount} new_energy:${this.Energy} max:${this.Genes[gene.MaxEnergy]}`);
             }
         } else {
@@ -280,7 +287,7 @@ class Animal {
                 //console.log("Moved");
             }
         }
-  
+        neighbors = world.getNeighborCells(this.Col, this.Row);
         this.considerMating(neighbors);
     }
 
@@ -289,10 +296,10 @@ class Animal {
         
         if (this.Energy < this.Genes[gene.MinMatingEnergy]) return;
         if (this.Energy < this.Genes[gene.EnergyToChild]) return;
-        //if their mating percent is 10%... then 90% of the time they'll exit here.
-        
-        if (this.Genes[gene.MatingPercent] <= rando(100)) return;
-        //this means that 10% of the time, they are willing to consider mating.
+
+        //if their mating percent is just 10%... then 90% of the time they'll exit here.
+        if (rando(100) > this.Genes[gene.MatingPercent]) return;
+        // this means that 10% of the time, they are willing to consider mating.
         // whether or not they run into anyone... that's a different issue.
         
         let neighbors:Animal[] = [];
@@ -301,6 +308,7 @@ class Animal {
             if (cell.Animal != null) {
                 // criteria to be a suitable mate:
                 if (cell.Animal.Alive  // picky
+                    && cell.Animal.Id != this.Id // avoid blindness
                     && cell.Animal.Age > cell.Animal.Genes[gene.AgeOfMaturity]
                     && cell.Animal.AdvertisedEnergy() > this.Genes[gene.MinimumAcceptableEnergyInAMate]) {
                     neighbors.push(cell.Animal);
@@ -318,6 +326,7 @@ class Animal {
         //TODO: only consider mating if the area is not overcrowded.
         //TODO: only consider mating if you have enough energy
         //TODO: rank the suitors by most energy.
+        //TODO: have other ways of ranking suitors
         //TODO: suitors have their energy, but also: how much energy they advertise.
         
         let potentialMate = neighbors[0];
@@ -352,7 +361,7 @@ class Animal {
         this.Col = col;
         this.Row = row;
         this.Age = age;
-        this.Size = 1; //baby size
+        this.Size = 3; //baby size
         this.Energy = initialEnergy; 
         this.Id = newId();
         this.Genes = getDefaultGenes();
@@ -407,9 +416,6 @@ function getDefaultGenes():EnumDictionary<gene, number> {
     };*/
 }
 
-function start2(randomize:boolean, worldWidth:number, worldHeight:number){
-    world = new World(84, 40, worldWidth, worldHeight, 30);
-}
 
 let ss="";
 let deaths = "";
@@ -457,9 +463,9 @@ function showStats() {
     world.Pop  = pop;
 
     let season = "winter";
-    if (ALWAYS_SUMMER || SUMMER) season="summer";
-    if (!ALWAYS_SUMMER) season+=" (length: " + SEASON_LENGTH + ")";
-    $id('stats').innerHTML = `pop: ${pop}<br/>tick: ${world.Tick}<br/>world.EnergyRate: ${world.EnergyRate.toFixed(3)}<br/>season: ${season}<br/>${deaths}<br />avg energy: ${(averageEnergy/pop).toFixed(2)}<br />${ss}`;   
+    if (world.Settings.IsAlwaysSummer || SUMMER) season="summer";
+    if (!world.Settings.IsAlwaysSummer) season+=" (length: " + world.Settings.SeasonLength + ")";
+    $id('stats').innerHTML = `pop: ${pop}<br/>tick: ${world.Tick}<br/>energy rate: ${world.Settings.EnergyRate.toFixed(3)}<br/>season: ${season}<br/>${deaths}<br />avg energy: ${(averageEnergy/pop).toFixed(2)}<br />${ss}`;   
 }
 /* utility functions */
 let id = 0;
@@ -533,17 +539,16 @@ function Crossover(parent1Genes:EnumDictionary<gene, number>, parent2Genes:EnumD
     
     return newGenes;
 }
-var geneNames = ["MatingPercent","MinMatingEnergy","EnergyToChild","MunchAmount","AgeOfMaturity","MinimumAcceptableEnergyInAMate","MaxEnergy"]
 function CombineGene(gene1:number, gene2:number):number {
     
     let result = gene1;
     let coin = rando(100);
     if (coin<50) result = gene2;
 
-    let mutate = Math.min(rando(MUTATE_1),rando(MUTATE_2));
+    let mutate = Math.min(rando(world.Settings.Mutate1),rando(world.Settings.Mutate2));
     coin = rando(100);
     if (coin<50) mutate *= -1;
-    mutate = mutate/MUTATE_DIVISOR;
+    mutate = mutate/world.Settings.MutateDivisor;
     result += mutate;
     if (result > 100) result = 100;
     if (result < 0) result = 0;
@@ -563,6 +568,7 @@ enum gene {
     MinimumAcceptableEnergyInAMate, //a pulse will do
     MaxEnergy //the maximum amount of energy this creature will ever have.
 };
+var geneNames = ["MatingPercent","MinMatingEnergy","EnergyToChild","MunchAmount","AgeOfMaturity","MinimumAcceptableEnergyInAMate","MaxEnergy"]
 
 let _defaultGenes:EnumDictionary<gene, number> = {
     [gene.MatingPercent]: 3, // what percent of the time are you thinking about mating
@@ -573,10 +579,28 @@ let _defaultGenes:EnumDictionary<gene, number> = {
     [gene.MinimumAcceptableEnergyInAMate]:1, //a pulse will do
     [gene.MaxEnergy]:50
 };
-
 /* end gene types */
 
-function populateForm(id:string){
+/* world parameters */
+class Settings {
+  StartingPopulationSize:number = 100;
+  Columns:number = 20;
+  Rows:number = 20;
+  SeasonLength:number = 20;
+  IsAlwaysSummer:boolean = false;
+  EnergyRate:number = 3.1; // how much energy does grass receive on each tick?
+  TickDuration:number = 0.1; //how many 'years' go by for every tick. (age is specified in years, not ticks.)
+  EnergyUpscaleFactor:number = 7; //how much do we scale their genetic 'maxenergy' to find their true maximum energy.
+  DoSeasonsGetLonger:boolean = true;
+  Mutate1:number = 100;
+  Mutate2:number = 100;
+  MutateDivisor:number = 20;
+  Delay:number=0;
+}
+
+/* end world parameters */
+
+function populateGeneForm(id:string){
     var genes = getDefaultGenes();
     var ss = "<h1>Default (starting) gene values</h1><br />";
 
@@ -587,7 +611,20 @@ function populateForm(id:string){
     $id(id).innerHTML = ss;
 }
 
-function readForm(id:string){
+function populateWorldForm(id:string) {
+    var settings = new Settings();
+    let ss = "<h2>World Settings</h2>";
+    for(var p of Object.getOwnPropertyNames(settings)) {
+        if ((typeof settings[p]) == 'number'){
+            ss+=`<span class='label'>${toWords(p)}</span><input type='text' id='${p}' value='${settings[p]}' /><br />`;
+        } else {
+            ss+=`<span class='label'><input type=checkbox id='${p}' name='${p}' value='${settings[p]}' /></span><label for='${p}'>${toWords(p)}</label><br />`;
+        }
+    }
+    $id(id).innerHTML = ss;
+}
+
+function readGeneForm(id:string){
     var ss = "";
 
     //Updates the default genes!
@@ -598,34 +635,74 @@ function readForm(id:string){
     }
     console.log(ss);
 }
+function readWorldForm(id:string){
+    var ss = "";
+    //world = new World( );
+    var settings = world.Settings;
+
+    //function start2(randomize:boolean, worldWidth:number, worldHeight:number){
+    //    world = new World(84, 40, worldWidth, worldHeight, 30);
+    //}
+    
+
+    //world.Settings = new Settings();
+
+    
+    for(var p of Object.getOwnPropertyNames(settings)) {
+        if ((typeof settings[p]) == 'number'){
+            settings[p] = parseFloat((<HTMLInputElement>$id(p)).value);
+        } else {
+            //boolean
+            settings[p] = (<HTMLInputElement>$id(p)).checked;
+        }
+    }
+    
+
+    console.log(JSON.stringify(settings));
+
+    //world.initialize();
+}
 
 document.addEventListener("DOMContentLoaded", function () {
-    populateForm('form');
+    populateGeneForm('geneForm');
+    populateWorldForm('worldForm');
     
     $id('go').addEventListener('click', function() {
 
-        readForm('form');
-        removeClass('.startHidden', 'startHidden');
-        $id('form').classList.add('hidden');
-        $id('go').classList.add('hidden');
 
+        
+        readGeneForm('geneForm');
+        removeClass('.startHidden', 'startHidden');
+        
         canvas = document.getElementById("html-canvas");
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
+        
         ctx = canvas.getContext("2d");
-        canvas.addEventListener('click', function() { 
+        
+        world = new World(canvas.clientWidth, canvas.clientHeight);
+        readWorldForm('worldForm');
+        world.initialize();
+        
+        $id('geneForm').classList.add('hidden');
+        $id('worldForm').classList.add('hidden');
+        $id('go').classList.add('hidden');
+
+
+        /*canvas.addEventListener('click', function() { 
             world.getNeighborCells(5,5);
         }, false);
+        */
         $id('up').addEventListener('click', function() { 
             //alert('up');
-            world.EnergyRate = world.EnergyRate * 1.05;
+            world.Settings.EnergyRate = world.Settings.EnergyRate * 1.05;
         }, false);
         $id('down').addEventListener('click', function() { 
             //alert('up');
-            world.EnergyRate = world.EnergyRate * 0.96;
+            world.Settings.EnergyRate = world.Settings.EnergyRate * 0.96;
         }, false);
 
-        start2(true, canvas.width, canvas.height);
+        //start2(true, canvas.width, canvas.height);
         draw2();
     });
 }, false);

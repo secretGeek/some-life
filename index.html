@@ -49,7 +49,7 @@ opacity:0.5;
 input[type=button]{
  padding:20px;
 }
-form#form,#go {
+form#geneForm,form#worldForm,#go {
  margin:20px;
 }
 span.label {
@@ -63,16 +63,33 @@ span.label {
  color:#DDD;
  text-shadow:0 0 5px #222;
 }
+body {
+ background-color:#222;
+ color:#AAA;
+}
+input[type=text] {
+background-color:#333;
+ color:#AAA;
+ padding:5px;
+ border-radius:3px;
+ border:none;
+ box-shadow:1px 1px 3px #111 inset;
+}
 </style>
 <span id='stats' class='startHidden'>pop:3</span>
 <span id='grassGrowthRate' class='startHidden'>
 <span id='up'  class='startHidden' title='increase the rate that grass grows'>Up</span>
 <span id='down'  class='startHidden' title='decrease the rate that grass grows'>Down</span>
 </span>
-<form id='form'>
+<form id='geneForm'>
 
 
 </form>
+<form id='worldForm'>
+
+
+</form>
+
 <input type='button' id='go' value='GO'></input>
 
 <canvas id="html-canvas" class='startHidden'>
