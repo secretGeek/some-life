@@ -4,37 +4,31 @@ var ctx;
 var world;
 var causeOfDeathNatural = [];
 var deathsToTrack = 100; //number of recent deaths to keep track of for stats reasons.
-//what size of an adult is a newborn baby? (e.g. 10% of adult size, then 0.1)
-//at what age are animals fullgrown?
-//let SEASON_LENGTH:number = 20;
-//const ALWAYS_SUMMER:boolean = false;
-var SUMMER = true;
-var season_day = 0; //how many days into the season are we?
-//const ENERGY_RATE:number = 3.1; // how much energy does grass receive on each tick?
-//const TICK_DURATION:number = 0.1; //how many 'years' go by for every tick. (age is specified in years, not ticks.)
-//const ENERGY_UPSCALE_FACTOR:number = 7; //how much do we scale their genetic 'maxenergy' to find their true maximum energy.
-//this is a consequence of genes being limited between 0 and 100, but the practical range discovered experimentally being quite different
-//const SEASONS_GET_LONGER:boolean = true;
-//const MUTATE_1 = 100;
-//const MUTATE_2 = 100;
-//const MUTATE_DIVISOR = 20;
-//how many milliseconds to wait between rendering each frame
-//let DELAY:number = 0;
+// what is the display size of a baby (relative to an adult) (e.g. 10% of adult size, then 0.1)
+var babySize = 0.3;
+// at what age are animals fullgrown?
+//Feature to consider:
+//predation
+//resource strategy...
+// if someone else is on fertile land -- do you hit them...
+// (and if so -- can they move away/respond as part of this turn?)
 function draw2() {
     if (!world.Trails)
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     world.Tick++;
-    season_day++;
-    if (season_day == world.Settings.SeasonLength) {
-        SUMMER = !SUMMER;
+    world.SeasonDay++;
+    if (world.SeasonDay == world.Settings.SeasonLength) {
+        world.ItIsSummer = !world.ItIsSummer;
         //this causes a strange seasonal change I find intriguing...
         if (world.Settings.DoSeasonsGetLonger)
             world.Settings.SeasonLength++;
-        season_day = 0;
+        if (world.Settings.MaxSeasonLength > 0)
+            world.Settings.SeasonLength = Math.min(world.Settings.MaxSeasonLength, world.Settings.SeasonLength);
+        world.SeasonDay = 0;
     }
     for (var _i = 0, _a = world.Cells; _i < _a.length; _i++) {
         var cell = _a[_i];
-        if (world.Settings.IsAlwaysSummer || SUMMER)
+        if (world.Settings.IsAlwaysSummer || world.ItIsSummer)
             cell.addEnergy(world.Settings.EnergyRate);
         drawCell(world, cell);
     }
@@ -43,7 +37,8 @@ function draw2() {
         var animal = _c[_b];
         animal.takeTurn(world);
         animal.addAge(world.Settings.TickDuration);
-        if (!animal.Alive && animal.DeadDuration >= animal.MaxDeadDuration) {
+        //if (!animal.Alive && animal.DeadDuration >= animal.MaxDeadDuration ) {
+        if (!animal.Alive && animal.DeadDuration >= world.Settings.MaxDeadDuration) {
             deadHeap.push(animal);
         }
         else {
@@ -58,10 +53,6 @@ function draw2() {
         world.Animals.splice(index, 1);
         // and it's gone!
     }
-    //restock
-    //while (world.Animals.length < world.StartingPopSize) {
-    //    world.tryAddAnimal();
-    //}
     if (world.Pop != 0) {
         showStats();
         if (world.Settings.Delay == 0) {
@@ -76,7 +67,8 @@ var World = /** @class */ (function () {
     function World(canvasWidth, canvasHeight) {
         this.Pop = -1;
         this.Settings = new Settings();
-        //StartingPopSize:number;
+        this.ItIsSummer = true; //starts true, may or may not ever change, depending on settings.
+        this.SeasonDay = 0; //today is the nth day of the current season.
         this.Tick = 0;
         this.Trails = false;
         this.CanvasWidth = canvasWidth;
@@ -173,9 +165,8 @@ var Cell = /** @class */ (function () {
         this.Energy = rando(100);
     }
     Cell.prototype.color = function () {
-        //ctx.fillStyle = '#FFA500';
-        //ctx.fillStyle = 'rgb(255, 165, 0)';
-        return "rgba(0, " + Math.floor(this.Energy * 2.55) + ", 0, 0.7)";
+        //return `rgba(0, ${Math.floor(this.Energy * 2.55)}, 0, 0.7)`;
+        return "hsla(120, 69%, " + Math.floor((this.Energy * 0.4) + 5) + "%, 0.9)";
     };
     Cell.prototype.addEnergy = function (amount) {
         var initialEnergy = this.Energy;
@@ -196,15 +187,16 @@ function drawCell(world, cell) {
 }
 var Animal = /** @class */ (function () {
     function Animal(col, row, age, initialEnergy) {
-        this.MaxAge = 100;
+        this.Generation = 0;
+        //MaxAge:number = 100;
         this.Alive = true;
         this.DeadDuration = 0; //if dead... how long have they been dead?
-        this.MaxDeadDuration = 5; //how long does the body take to decompose
+        //MaxDeadDuration:number = 5; //how long does the body take to decompose
         this.Energy = 100;
         this.Col = col;
         this.Row = row;
         this.Age = age;
-        this.Size = 3; //baby size
+        //this.Size = 0; //baby size
         this.Energy = initialEnergy;
         this.Id = newId();
         this.Genes = getDefaultGenes();
@@ -322,6 +314,7 @@ var Animal = /** @class */ (function () {
         //TODO: perform cross over of genes;
         world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.Genes[gene.EnergyToChild]);
         var child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
+        child.Generation = (this.Generation + potentialMate.Generation) / 2 + 1;
         child.Genes = Crossover(this.Genes, potentialMate.Genes);
         //child.Energy = this.EnergyToChild;
         this.Energy -= this.Genes[gene.EnergyToChild];
@@ -332,9 +325,12 @@ var Animal = /** @class */ (function () {
         return this.Energy;
     };
     Animal.prototype.addAge = function (tickDuration) {
-        this.Age = Math.min(this.MaxAge, this.Age + tickDuration);
-        this.Size = this.Age / this.MaxAge;
-        if (this.Age >= this.MaxAge) {
+        //this.Age = Math.min(this.MaxAge, this.Age+tickDuration);
+        this.Age = Math.min(world.Settings.MaxAge, this.Age + tickDuration);
+        //this.Size = babySize + ((1.0 - babySize)*(this.Age / this.MaxAge)); //from 0..1.0
+        this.Size = babySize + ((1.0 - babySize) * (this.Age / world.Settings.MaxAge)); //from 0..1.0
+        //if (this.Age >= this.MaxAge) {
+        if (this.Age >= world.Settings.MaxAge) {
             this.Alive = false;
             //console.log("Died of old age.");
             causeOfDeathNatural.push(true);
@@ -342,17 +338,20 @@ var Animal = /** @class */ (function () {
                 causeOfDeathNatural.splice(0, 1);
         }
         if (!this.Alive) {
-            this.DeadDuration = Math.min(this.MaxDeadDuration, this.DeadDuration + tickDuration);
+            //this.DeadDuration = Math.min(this.MaxDeadDuration, this.DeadDuration+tickDuration);
+            this.DeadDuration = Math.min(world.Settings.MaxDeadDuration, this.DeadDuration + tickDuration);
         }
     };
     Animal.prototype.color = function () {
         if (!this.Alive) {
-            var fade = Math.max(0, 1 - (this.DeadDuration / this.MaxDeadDuration));
+            //let fade = Math.max(0, 1 - (this.DeadDuration / this.MaxDeadDuration));
+            var fade = Math.max(0, 1 - (this.DeadDuration / world.Settings.MaxDeadDuration));
             var color = "rgba(20,20,20, " + fade + ")";
             //console.log(color);
             return color;
         }
-        return 'rgba(12,100,200, 0.9)';
+        return "hsla(" + Math.floor(this.Genes[gene.Hugh] * 3.6) + ", " + Math.floor(this.Genes[gene.Saturation]) + "%, " + Math.floor(this.Genes[gene.Lightness] * 0.6) + "%, 0.9)";
+        //return 'rgba(12,100,200, 0.9)';
     };
     return Animal;
 }());
@@ -384,16 +383,20 @@ function showStats() {
     //todo: average energy
     //todo: average of each gene.
     //todo: ability to expand/collapse the stats.
-    var averageGenes = [0, 0, 0, 0, 0, 0, 0];
-    var minGenes = [-1, -1, -1, -1, -1, -1, -1];
-    var maxGenes = [0, 0, 0, 0, 0, 0, 0];
+    var averageGenes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    var minGenes = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1];
+    var maxGenes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
     var pop = 0;
     var averageEnergy = 0;
+    var averageGeneration = 0;
+    var averageAge = 0;
     for (var _i = 0, _a = world.Animals; _i < _a.length; _i++) {
         var a = _a[_i];
         if (a.Alive) {
             pop++;
             averageEnergy += a.Energy;
+            averageGeneration += a.Generation;
+            averageAge += a.Age;
             if (world.Tick % 50 == 1) {
                 for (var _b = 0, _c = Object.entries(a.Genes); _b < _c.length; _b++) {
                     var _d = _c[_b], key = _d[0], value = _d[1];
@@ -424,11 +427,11 @@ function showStats() {
     }
     world.Pop = pop;
     var season = "winter";
-    if (world.Settings.IsAlwaysSummer || SUMMER)
+    if (world.Settings.IsAlwaysSummer || world.ItIsSummer)
         season = "summer";
     if (!world.Settings.IsAlwaysSummer)
-        season += " (length: " + world.Settings.SeasonLength + ")";
-    $id('stats').innerHTML = "pop: " + pop + "<br/>tick: " + world.Tick + "<br/>energy rate: " + world.Settings.EnergyRate.toFixed(3) + "<br/>season: " + season + "<br/>" + deaths + "<br />avg energy: " + (averageEnergy / pop).toFixed(2) + "<br />" + ss;
+        season += " (day " + world.SeasonDay + " of " + world.Settings.SeasonLength + ")";
+    $id('stats').innerHTML = "pop: " + pop + "<br/>tick: " + world.Tick + "<br/>energy rate: " + world.Settings.EnergyRate.toFixed(3) + "<br/>season: " + season + "<br/>" + deaths + "<br />avg energy: " + (averageEnergy / pop).toFixed(2) + "<br />avg gen:  " + (averageGeneration / pop).toFixed(2) + "<br />avg age:  " + (averageAge / pop).toFixed(2) + "<br />" + ss;
 }
 /* utility functions */
 var id = 0;
@@ -495,6 +498,9 @@ function Crossover(parent1Genes, parent2Genes) {
         _a[gene.AgeOfMaturity] = CombineGene(parent1Genes[gene.AgeOfMaturity], parent2Genes[gene.AgeOfMaturity]),
         _a[gene.MinimumAcceptableEnergyInAMate] = CombineGene(parent1Genes[gene.MinimumAcceptableEnergyInAMate], parent2Genes[gene.MinimumAcceptableEnergyInAMate]),
         _a[gene.MaxEnergy] = CombineGene(parent1Genes[gene.MaxEnergy], parent2Genes[gene.MaxEnergy]),
+        _a[gene.Hugh] = CombineGene(parent1Genes[gene.Hugh], parent2Genes[gene.Hugh]),
+        _a[gene.Saturation] = CombineGene(parent1Genes[gene.Saturation], parent2Genes[gene.Saturation]),
+        _a[gene.Lightness] = CombineGene(parent1Genes[gene.Lightness], parent2Genes[gene.Lightness]),
         _a);
     return newGenes;
 }
@@ -523,10 +529,13 @@ var gene;
     gene[gene["MunchAmount"] = 3] = "MunchAmount";
     gene[gene["AgeOfMaturity"] = 4] = "AgeOfMaturity";
     gene[gene["MinimumAcceptableEnergyInAMate"] = 5] = "MinimumAcceptableEnergyInAMate";
-    gene[gene["MaxEnergy"] = 6] = "MaxEnergy"; //the maximum amount of energy this creature will ever have.
+    gene[gene["MaxEnergy"] = 6] = "MaxEnergy";
+    gene[gene["Hugh"] = 7] = "Hugh";
+    gene[gene["Saturation"] = 8] = "Saturation";
+    gene[gene["Lightness"] = 9] = "Lightness";
 })(gene || (gene = {}));
 ;
-var geneNames = ["MatingPercent", "MinMatingEnergy", "EnergyToChild", "MunchAmount", "AgeOfMaturity", "MinimumAcceptableEnergyInAMate", "MaxEnergy"];
+var geneNames = ["MatingPercent", "MinMatingEnergy", "EnergyToChild", "MunchAmount", "AgeOfMaturity", "MinimumAcceptableEnergyInAMate", "MaxEnergy", "Hugh", "Saturation", "Lightness"];
 var _defaultGenes = (_a = {},
     _a[gene.MatingPercent] = 3,
     _a[gene.MinMatingEnergy] = 70,
@@ -535,23 +544,34 @@ var _defaultGenes = (_a = {},
     _a[gene.AgeOfMaturity] = 10,
     _a[gene.MinimumAcceptableEnergyInAMate] = 1,
     _a[gene.MaxEnergy] = 50,
+    _a[gene.Hugh] = 50,
+    _a[gene.Saturation] = 50,
+    _a[gene.Lightness] = 100,
     _a);
 /* end gene types */
 /* world parameters */
 var Settings = /** @class */ (function () {
     function Settings() {
-        this.StartingPopulationSize = 100;
-        this.Columns = 20;
-        this.Rows = 20;
-        this.SeasonLength = 20;
+        this.StartingPopulationSize = 120;
+        this.Columns = 80;
+        this.Rows = 40;
         this.IsAlwaysSummer = false;
-        this.EnergyRate = 3.1; // how much energy does grass receive on each tick?
-        this.TickDuration = 0.1; //how many 'years' go by for every tick. (age is specified in years, not ticks.)
-        this.EnergyUpscaleFactor = 7; //how much do we scale their genetic 'maxenergy' to find their true maximum energy.
+        this.SeasonLength = 20;
         this.DoSeasonsGetLonger = true;
+        this.MaxSeasonLength = 220;
+        this.MaxAge = 100; //How long do animals live
+        this.MaxDeadDuration = 10; //How long does it take for animals bodies to break down
+        // How much energy does grass receive on each tick?
+        this.EnergyRate = 5.1;
+        // How many 'years' go by for every tick. (age is specified in years, not ticks.)
+        this.TickDuration = 0.1;
+        // How much do we scale an animals genetic 'maxenergy' to find their true maximum energy.
+        // This is a consequence of genes being limited between 0 and 100, but the practical range discovered experimentally being quite different
+        this.EnergyUpscaleFactor = 7;
         this.Mutate1 = 100;
         this.Mutate2 = 100;
         this.MutateDivisor = 20;
+        // How many milliseconds to wait between rendering each frame
         this.Delay = 0;
     }
     return Settings;
@@ -575,7 +595,7 @@ function populateWorldForm(id) {
             ss += "<span class='label'>" + toWords(p) + "</span><input type='text' id='" + p + "' value='" + settings[p] + "' /><br />";
         }
         else {
-            ss += "<span class='label'><input type=checkbox id='" + p + "' name='" + p + "' value='" + settings[p] + "' /></span><label for='" + p + "'>" + toWords(p) + "</label><br />";
+            ss += "<label class='label' for='" + p + "'>" + toWords(p) + "</label><input type=checkbox id='" + p + "' name='" + p + "' " + (settings[p] ? 'checked=checked' : '') + " /><br />";
         }
     }
     $id(id).innerHTML = ss;
@@ -592,12 +612,7 @@ function readGeneForm(id) {
 }
 function readWorldForm(id) {
     var ss = "";
-    //world = new World( );
     var settings = world.Settings;
-    //function start2(randomize:boolean, worldWidth:number, worldHeight:number){
-    //    world = new World(84, 40, worldWidth, worldHeight, 30);
-    //}
-    //world.Settings = new Settings();
     for (var _i = 0, _a = Object.getOwnPropertyNames(settings); _i < _a.length; _i++) {
         var p = _a[_i];
         if ((typeof settings[p]) == 'number') {
@@ -609,7 +624,6 @@ function readWorldForm(id) {
         }
     }
     console.log(JSON.stringify(settings));
-    //world.initialize();
 }
 document.addEventListener("DOMContentLoaded", function () {
     populateGeneForm('geneForm');
@@ -629,8 +643,7 @@ document.addEventListener("DOMContentLoaded", function () {
         $id('go').classList.add('hidden');
         /*canvas.addEventListener('click', function() {
             world.getNeighborCells(5,5);
-        }, false);
-        */
+        }, false);*/
         $id('up').addEventListener('click', function () {
             //alert('up');
             world.Settings.EnergyRate = world.Settings.EnergyRate * 1.05;
@@ -639,7 +652,6 @@ document.addEventListener("DOMContentLoaded", function () {
             //alert('up');
             world.Settings.EnergyRate = world.Settings.EnergyRate * 0.96;
         }, false);
-        //start2(true, canvas.width, canvas.height);
         draw2();
     });
 }, false);
