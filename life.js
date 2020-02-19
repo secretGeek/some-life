@@ -1,4 +1,3 @@
-var _a;
 var canvas;
 var ctx;
 var world;
@@ -6,7 +5,6 @@ var causeOfDeathNatural = [];
 var deathsToTrack = 100; //number of recent deaths to keep track of for stats reasons.
 // what is the display size of a baby (relative to an adult) (e.g. 10% of adult size, then 0.1)
 var babySize = 0.3;
-// at what age are animals fullgrown?
 //Feature to consider:
 //predation
 //resource strategy...
@@ -37,7 +35,6 @@ function draw2() {
         var animal = _c[_b];
         animal.takeTurn(world);
         animal.addAge(world.Settings.TickDuration);
-        //if (!animal.Alive && animal.DeadDuration >= animal.MaxDeadDuration ) {
         if (!animal.Alive && animal.DeadDuration >= world.Settings.MaxDeadDuration) {
             deadHeap.push(animal);
         }
@@ -74,26 +71,6 @@ var World = /** @class */ (function () {
         this.CanvasWidth = canvasWidth;
         this.CanvasHeight = canvasHeight;
     }
-    World.prototype.tryAddAnimal = function () {
-        var col = rando(this.Settings.Columns);
-        var row = rando(this.Settings.Rows);
-        var age = rando(100);
-        var initialEnergy = 100;
-        return this.addAnimal(col, row, age, initialEnergy);
-    };
-    World.prototype.addAnimal = function (col, row, age, initialEnergy) {
-        var cell = this.getCell(col, row);
-        if (cell.Animal == null) {
-            var animal = new Animal(col, row, age, initialEnergy);
-            this.Animals.push(animal);
-            cell.Animal = animal;
-            return true;
-        }
-        else {
-            //console.log("ALREADY an animal there!");
-            return false;
-        }
-    };
     World.prototype.initialize = function () {
         this.Cells = [];
         this.WidthOfCell = this.CanvasWidth / this.Settings.Columns;
@@ -112,12 +89,29 @@ var World = /** @class */ (function () {
         }
         console.log(this);
     };
-    //EnergyRate:number = ENERGY_RATE;
-    //TickDuration:number = TICK_DURATION;
+    World.prototype.tryAddAnimal = function () {
+        var col = rando(this.Settings.Columns);
+        var row = rando(this.Settings.Rows);
+        var age = rando(100);
+        var initialEnergy = 100;
+        return this.addAnimal(col, row, age, initialEnergy);
+    };
+    World.prototype.addAnimal = function (col, row, age, initialEnergy) {
+        var cell = this.getCell(col, row);
+        if (cell.Animal == null) {
+            var animal = new Animal(col, row, age, initialEnergy);
+            this.Animals.push(animal);
+            cell.Animal = animal;
+            return true;
+        }
+        else {
+            return false;
+        }
+    };
     World.prototype.getCell = function (col, row) {
         return this.Cells[col + (row * this.Settings.Columns)];
     };
-    //get the 8 cells that surround this cell -- return them in random order.
+    // get the 8 cells that surround this cell and return them in random order.
     World.prototype.getNeighborCells = function (col, row) {
         var result = [];
         //TODO: a neighborhood could be a larger area, consider 3x3, 5x5, 7x7... 
@@ -137,13 +131,7 @@ var World = /** @class */ (function () {
                     newY = this.Settings.Rows - newY;
                 if (offsetX != 0 || offsetY != 0) // ignore current tile...
                  {
-                    //console.log(`newX, newY: ${newX}, ${newY} -- is cell number... ${newX + (newY*this.Columns)}`)
-                    var cell = this.getCell(newX, newY); //this.Cells[newX + (newY*this.Columns)];
-                    //if (cell.Col == newX && cell.Row == newY) {
-                    //    //console.log("As expected...");
-                    //} else {
-                    //    //console.log(`Expected: col,row: ${newX}, ${newY}, found: ${cell.Col},${cell.Row}`);
-                    //}
+                    var cell = this.getCell(newX, newY);
                     result.push(cell);
                 }
             }
@@ -152,12 +140,6 @@ var World = /** @class */ (function () {
     };
     return World;
 }());
-//a single population? multiple pops??
-var Population = /** @class */ (function () {
-    function Population() {
-    }
-    return Population;
-}());
 var Cell = /** @class */ (function () {
     function Cell(col, row) {
         this.Col = col;
@@ -165,7 +147,6 @@ var Cell = /** @class */ (function () {
         this.Energy = rando(100);
     }
     Cell.prototype.color = function () {
-        //return `rgba(0, ${Math.floor(this.Energy * 2.55)}, 0, 0.7)`;
         return "hsla(120, 69%, " + Math.floor((this.Energy * 0.4) + 5) + "%, 0.9)";
     };
     Cell.prototype.addEnergy = function (amount) {
@@ -173,13 +154,10 @@ var Cell = /** @class */ (function () {
         //cannot be less than zero, cannot be greater than 100.
         this.Energy = Math.max(0, Math.min(100, this.Energy + amount));
         return (this.Energy - initialEnergy); //how much difference did it make;
-        //return this.Energy - amount;
     };
     return Cell;
 }());
 function drawCell(world, cell) {
-    //TODO: color of cell!
-    //ctx.fillStyle = 'orange';
     ctx.fillStyle = cell.color();
     ctx.beginPath();
     ctx.fillRect(world.WidthOfCell * cell.Col, world.HeightOfCell * cell.Row, world.WidthOfCell, world.HeightOfCell);
@@ -188,10 +166,8 @@ function drawCell(world, cell) {
 var Animal = /** @class */ (function () {
     function Animal(col, row, age, initialEnergy) {
         this.Generation = 0;
-        //MaxAge:number = 100;
         this.Alive = true;
         this.DeadDuration = 0; //if dead... how long have they been dead?
-        //MaxDeadDuration:number = 5; //how long does the body take to decompose
         this.Energy = 100;
         this.Col = col;
         this.Row = row;
@@ -237,17 +213,17 @@ var Animal = /** @class */ (function () {
                 //console.log("Moved");
             }
             //eat some energy...
-            var munchAmount = this.Genes[gene.MunchAmount];
-            if (this.Energy + munchAmount > (this.Genes[gene.MaxEnergy] * world.Settings.EnergyUpscaleFactor)) {
+            var munchAmount = this.Genes.MunchAmount;
+            if (this.Energy + munchAmount > (this.Genes.MaxEnergy * world.Settings.EnergyUpscaleFactor)) {
                 // don't try to eat more than you can store!
-                munchAmount = (this.Genes[gene.MaxEnergy] * world.Settings.EnergyUpscaleFactor) - this.Energy;
+                munchAmount = (this.Genes.MaxEnergy * world.Settings.EnergyUpscaleFactor) - this.Energy;
             }
             //and you can't eat more than the cell can give you!
             munchAmount = -1 * bestNeighbor.addEnergy(-1 * munchAmount);
             //console.log(`munch amount: ${munchAmount}`);
             this.Energy += munchAmount;
-            if (this.Energy > (this.Genes[gene.MaxEnergy] * world.Settings.EnergyUpscaleFactor)) {
-                console.log("I have more energy than I thought possible! munched:" + munchAmount + " new_energy:" + this.Energy + " max:" + this.Genes[gene.MaxEnergy]);
+            if (this.Energy > (this.Genes.MaxEnergy * world.Settings.EnergyUpscaleFactor)) {
+                console.log("I have more energy than I thought possible! munched:" + munchAmount + " new_energy:" + this.Energy + " max:" + this.Genes.MaxEnergy);
             }
         }
         else {
@@ -257,28 +233,24 @@ var Animal = /** @class */ (function () {
             this.Energy -= standingStillEnergy;
             if (this.Energy <= 0) {
                 this.Alive = false;
-                //console.log("Died of exhaustion.");
                 causeOfDeathNatural.push(false);
                 while (causeOfDeathNatural.length > deathsToTrack)
                     causeOfDeathNatural.splice(0, 1);
                 return;
-            }
-            else {
-                //console.log("Moved");
             }
         }
         neighbors = world.getNeighborCells(this.Col, this.Row);
         this.considerMating(neighbors);
     };
     Animal.prototype.considerMating = function (cells) {
-        if (this.Age < this.Genes[gene.AgeOfMaturity])
+        if (this.Age < this.Genes.AgeOfMaturity)
             return;
-        if (this.Energy < this.Genes[gene.MinMatingEnergy])
+        if (this.Energy < this.Genes.MinMatingEnergy)
             return;
-        if (this.Energy < this.Genes[gene.EnergyToChild])
+        if (this.Energy < this.Genes.EnergyToChild)
             return;
         //if their mating percent is just 10%... then 90% of the time they'll exit here.
-        if (rando(100) > this.Genes[gene.MatingPercent])
+        if (rando(100) > this.Genes.MatingPercent)
             return;
         // this means that 10% of the time, they are willing to consider mating.
         // whether or not they run into anyone... that's a different issue.
@@ -290,8 +262,8 @@ var Animal = /** @class */ (function () {
                 // criteria to be a suitable mate:
                 if (cell.Animal.Alive // picky
                     && cell.Animal.Id != this.Id // avoid blindness
-                    && cell.Animal.Age > cell.Animal.Genes[gene.AgeOfMaturity]
-                    && cell.Animal.AdvertisedEnergy() > this.Genes[gene.MinimumAcceptableEnergyInAMate]) {
+                    && cell.Animal.Age > cell.Animal.Genes.AgeOfMaturity
+                    && cell.Animal.AdvertisedEnergy() > this.Genes.MinimumAcceptableEnergyInYourMate) {
                     neighbors.push(cell.Animal);
                 }
             }
@@ -308,16 +280,15 @@ var Animal = /** @class */ (function () {
         //TODO: only consider mating if the area is not overcrowded.
         //TODO: only consider mating if you have enough energy
         //TODO: rank the suitors by most energy.
-        //TODO: have other ways of ranking suitors
+        //TODO: have other strategies for ranking suitors
         //TODO: suitors have their energy, but also: how much energy they advertise.
         var potentialMate = neighbors[0];
-        //TODO: perform cross over of genes;
-        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.Genes[gene.EnergyToChild]);
+        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.Genes.EnergyToChild);
         var child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
         child.Generation = (this.Generation + potentialMate.Generation) / 2 + 1;
         child.Genes = Crossover(this.Genes, potentialMate.Genes);
         //child.Energy = this.EnergyToChild;
-        this.Energy -= this.Genes[gene.EnergyToChild];
+        this.Energy -= this.Genes.EnergyToChild;
     };
     Animal.prototype.AdvertisedEnergy = function () {
         //todo: consider displaying a different amount of energy.
@@ -325,9 +296,8 @@ var Animal = /** @class */ (function () {
         return this.Energy;
     };
     Animal.prototype.addAge = function (tickDuration) {
-        //this.Age = Math.min(this.MaxAge, this.Age+tickDuration);
         this.Age = Math.min(world.Settings.MaxAge, this.Age + tickDuration);
-        //this.Size = babySize + ((1.0 - babySize)*(this.Age / this.MaxAge)); //from 0..1.0
+        //babySize is a fraction, e.g. 0.3, so that babies are not a tiny spec, but start at 30% of final size.
         this.Size = babySize + ((1.0 - babySize) * (this.Age / world.Settings.MaxAge)); //from 0..1.0
         //if (this.Age >= this.MaxAge) {
         if (this.Age >= world.Settings.MaxAge) {
@@ -338,7 +308,6 @@ var Animal = /** @class */ (function () {
                 causeOfDeathNatural.splice(0, 1);
         }
         if (!this.Alive) {
-            //this.DeadDuration = Math.min(this.MaxDeadDuration, this.DeadDuration+tickDuration);
             this.DeadDuration = Math.min(world.Settings.MaxDeadDuration, this.DeadDuration + tickDuration);
         }
     };
@@ -350,7 +319,7 @@ var Animal = /** @class */ (function () {
             //console.log(color);
             return color;
         }
-        return "hsla(" + Math.floor(this.Genes[gene.Hugh] * 3.6) + ", " + Math.floor(this.Genes[gene.Saturation]) + "%, " + Math.floor(this.Genes[gene.Lightness] * 0.6) + "%, 0.9)";
+        return "hsla(" + Math.floor(this.Genes.Hugh * 3.6) + ", " + Math.floor(this.Genes.Saturation) + "%, " + Math.floor(this.Genes.Lightness * 0.6) + "%, 0.9)";
         //return 'rgba(12,100,200, 0.9)';
     };
     return Animal;
@@ -366,59 +335,58 @@ function drawAnimal(world, animal) {
     ctx.stroke();
 }
 function getDefaultGenes() {
-    return _defaultGenes; /*{
-        [gene.MatingPercent]: 3, // what percent of the time are you thinking about mating
-        [gene.MinMatingEnergy]: 70, //if less than this much energy, don't consider mating
-        [gene.EnergyToChild]:20, // how much energy does a child start with
-        [gene.MunchAmount]:25, //how much energy will they try to extract from the ground each chance they get
-        [gene.AgeOfMaturity]:10, //how old do they have to be before they can mate
-        [gene.MinimumAcceptableEnergyInAMate]:1, //a pulse will do
-        [gene.MaxEnergy]:50
-    };*/
+    return _defaultGenes;
 }
 var ss = "";
 var deaths = "";
 function showStats() {
-    //let pop = world.Animals.length;
-    //todo: average energy
-    //todo: average of each gene.
     //todo: ability to expand/collapse the stats.
-    var averageGenes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    var minGenes = [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1];
-    var maxGenes = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    var averageGenes = new Genes();
+    var minGenes = new Genes();
+    var maxGenes = new Genes();
+    for (var _i = 0, _a = Object.getOwnPropertyNames(averageGenes); _i < _a.length; _i++) {
+        var prop = _a[_i];
+        averageGenes[prop] = 0;
+        minGenes[prop] = -1;
+        maxGenes[prop] = 0;
+    }
     var pop = 0;
     var averageEnergy = 0;
     var averageGeneration = 0;
     var averageAge = 0;
-    for (var _i = 0, _a = world.Animals; _i < _a.length; _i++) {
-        var a = _a[_i];
+    var geneNames = [];
+    for (var _b = 0, _c = world.Animals; _b < _c.length; _b++) {
+        var a = _c[_b];
         if (a.Alive) {
             pop++;
             averageEnergy += a.Energy;
             averageGeneration += a.Generation;
             averageAge += a.Age;
             if (world.Tick % 50 == 1) {
-                for (var _b = 0, _c = Object.entries(a.Genes); _b < _c.length; _b++) {
-                    var _d = _c[_b], key = _d[0], value = _d[1];
-                    averageGenes[key] += value;
-                    if (minGenes[key] == -1 || value < minGenes[key])
-                        minGenes[key] = value;
-                    if (value > maxGenes[key])
-                        maxGenes[key] = value;
+                for (var _d = 0, _e = Object.getOwnPropertyNames(a.Genes); _d < _e.length; _d++) {
+                    var prop = _e[_d];
+                    var value = a.Genes[prop];
+                    geneNames.push(prop);
+                    averageGenes[prop] += value;
+                    if (minGenes[prop] == -1 || value < minGenes[prop])
+                        minGenes[prop] = value;
+                    if (value > maxGenes[prop])
+                        maxGenes[prop] = value;
                 }
             }
         }
     }
     if (world.Tick % 50 == 1) {
         ss = "";
-        for (var k in averageGenes) {
-            averageGenes[k] = averageGenes[k] / pop;
-            ss += toWords(geneNames[k]) + ": " + averageGenes[k].toFixed(3) + " (" + minGenes[k].toFixed(3) + " - " + maxGenes[k].toFixed(3) + ")<br />";
+        for (var _f = 0, _g = Object.getOwnPropertyNames(averageGenes); _f < _g.length; _f++) {
+            var prop = _g[_f];
+            averageGenes[prop] = averageGenes[prop] / pop;
+            ss += toWords(prop) + ": " + averageGenes[prop].toFixed(3) + " (" + minGenes[prop].toFixed(3) + " - " + maxGenes[prop].toFixed(3) + ")<br />";
         }
         if (causeOfDeathNatural.length > 0) {
             var natural = 0;
-            for (var _e = 0, causeOfDeathNatural_1 = causeOfDeathNatural; _e < causeOfDeathNatural_1.length; _e++) {
-                var d = causeOfDeathNatural_1[_e];
+            for (var _h = 0, causeOfDeathNatural_1 = causeOfDeathNatural; _h < causeOfDeathNatural_1.length; _h++) {
+                var d = causeOfDeathNatural_1[_h];
                 if (d)
                     natural++;
             }
@@ -488,21 +456,12 @@ function toWords(pascally) {
 /* end utility */
 /* gene types */
 function Crossover(parent1Genes, parent2Genes) {
-    var _a;
-    //todo: return genes;
-    var newGenes = (_a = {},
-        _a[gene.MatingPercent] = CombineGene(parent1Genes[gene.MatingPercent], parent2Genes[gene.MatingPercent]),
-        _a[gene.MinMatingEnergy] = CombineGene(parent1Genes[gene.MinMatingEnergy], parent2Genes[gene.MinMatingEnergy]),
-        _a[gene.EnergyToChild] = CombineGene(parent1Genes[gene.EnergyToChild], parent2Genes[gene.EnergyToChild]),
-        _a[gene.MunchAmount] = CombineGene(parent1Genes[gene.MunchAmount], parent2Genes[gene.MunchAmount]),
-        _a[gene.AgeOfMaturity] = CombineGene(parent1Genes[gene.AgeOfMaturity], parent2Genes[gene.AgeOfMaturity]),
-        _a[gene.MinimumAcceptableEnergyInAMate] = CombineGene(parent1Genes[gene.MinimumAcceptableEnergyInAMate], parent2Genes[gene.MinimumAcceptableEnergyInAMate]),
-        _a[gene.MaxEnergy] = CombineGene(parent1Genes[gene.MaxEnergy], parent2Genes[gene.MaxEnergy]),
-        _a[gene.Hugh] = CombineGene(parent1Genes[gene.Hugh], parent2Genes[gene.Hugh]),
-        _a[gene.Saturation] = CombineGene(parent1Genes[gene.Saturation], parent2Genes[gene.Saturation]),
-        _a[gene.Lightness] = CombineGene(parent1Genes[gene.Lightness], parent2Genes[gene.Lightness]),
-        _a);
-    return newGenes;
+    var genes = new Genes();
+    for (var _i = 0, _a = Object.getOwnPropertyNames(parent1Genes); _i < _a.length; _i++) {
+        var prop = _a[_i];
+        genes[prop] = CombineGene(parent1Genes[prop], parent2Genes[prop]);
+    }
+    return genes;
 }
 function CombineGene(gene1, gene2) {
     var result = gene1;
@@ -521,33 +480,22 @@ function CombineGene(gene1, gene2) {
         result = 0;
     return result;
 }
-var gene;
-(function (gene) {
-    gene[gene["MatingPercent"] = 0] = "MatingPercent";
-    gene[gene["MinMatingEnergy"] = 1] = "MinMatingEnergy";
-    gene[gene["EnergyToChild"] = 2] = "EnergyToChild";
-    gene[gene["MunchAmount"] = 3] = "MunchAmount";
-    gene[gene["AgeOfMaturity"] = 4] = "AgeOfMaturity";
-    gene[gene["MinimumAcceptableEnergyInAMate"] = 5] = "MinimumAcceptableEnergyInAMate";
-    gene[gene["MaxEnergy"] = 6] = "MaxEnergy";
-    gene[gene["Hugh"] = 7] = "Hugh";
-    gene[gene["Saturation"] = 8] = "Saturation";
-    gene[gene["Lightness"] = 9] = "Lightness";
-})(gene || (gene = {}));
-;
-var geneNames = ["MatingPercent", "MinMatingEnergy", "EnergyToChild", "MunchAmount", "AgeOfMaturity", "MinimumAcceptableEnergyInAMate", "MaxEnergy", "Hugh", "Saturation", "Lightness"];
-var _defaultGenes = (_a = {},
-    _a[gene.MatingPercent] = 3,
-    _a[gene.MinMatingEnergy] = 70,
-    _a[gene.EnergyToChild] = 20,
-    _a[gene.MunchAmount] = 25,
-    _a[gene.AgeOfMaturity] = 10,
-    _a[gene.MinimumAcceptableEnergyInAMate] = 1,
-    _a[gene.MaxEnergy] = 50,
-    _a[gene.Hugh] = 50,
-    _a[gene.Saturation] = 50,
-    _a[gene.Lightness] = 100,
-    _a);
+var Genes = /** @class */ (function () {
+    function Genes() {
+        this.MatingPercent = 3; // what percent of the time are you thinking about mating
+        this.MinMatingEnergy = 70; //if less than this much energy, don't consider mating
+        this.EnergyToChild = 20; // how much energy does a child start with
+        this.MunchAmount = 25; //how much energy will they try to extract from the ground each chance they get
+        this.AgeOfMaturity = 10; //how old do they have to be before they can mate
+        this.MinimumAcceptableEnergyInYourMate = 1; //a pulse will do
+        this.MaxEnergy = 50;
+        this.Hugh = 50;
+        this.Saturation = 50;
+        this.Lightness = 100;
+    }
+    return Genes;
+}());
+var _defaultGenes = new Genes();
 /* end gene types */
 /* world parameters */
 var Settings = /** @class */ (function () {
@@ -580,9 +528,9 @@ var Settings = /** @class */ (function () {
 function populateGeneForm(id) {
     var genes = getDefaultGenes();
     var ss = "<h1>Default (starting) gene values</h1><br />";
-    for (var _i = 0, _a = Object.entries(genes); _i < _a.length; _i++) {
-        var _b = _a[_i], key = _b[0], value = _b[1];
-        ss += "<span class='label'>" + toWords(geneNames[key]) + "</span><input type='text' id='" + geneNames[key] + "' value='" + value + "' /><br />";
+    for (var _i = 0, _a = Object.getOwnPropertyNames(genes); _i < _a.length; _i++) {
+        var prop = _a[_i];
+        ss += "<span class='label'>" + toWords(prop) + "</span><input type='text' id='" + prop + "' value='" + genes[prop] + "' /><br />";
     }
     $id(id).innerHTML = ss;
 }
@@ -602,11 +550,12 @@ function populateWorldForm(id) {
 }
 function readGeneForm(id) {
     var ss = "";
+    var genes = getDefaultGenes();
     //Updates the default genes!
-    for (var _i = 0, _a = Object.entries(_defaultGenes); _i < _a.length; _i++) {
-        var _b = _a[_i], key = _b[0], value = _b[1];
-        _defaultGenes[key] = parseFloat($id(geneNames[key]).value);
-        ss += "_defaultGenes[" + key + "] = parseFloat((<HTMLInputElement>$id('" + geneNames[key] + "')).value); //" + parseFloat($id(geneNames[key]).value) + "\r\n";
+    for (var _i = 0, _a = Object.getOwnPropertyNames(genes); _i < _a.length; _i++) {
+        var prop = _a[_i];
+        genes[prop] = parseFloat($id(prop).value);
+        ss += "_defaultGenes[" + prop + "] = parseFloat((<HTMLInputElement>$id('" + prop + "')).value); //" + parseFloat($id(prop).value) + "\r\n";
     }
     console.log(ss);
 }
@@ -645,11 +594,9 @@ document.addEventListener("DOMContentLoaded", function () {
             world.getNeighborCells(5,5);
         }, false);*/
         $id('up').addEventListener('click', function () {
-            //alert('up');
             world.Settings.EnergyRate = world.Settings.EnergyRate * 1.05;
         }, false);
         $id('down').addEventListener('click', function () {
-            //alert('up');
             world.Settings.EnergyRate = world.Settings.EnergyRate * 0.96;
         }, false);
         draw2();

@@ -7,7 +7,6 @@ var deathsToTrack:number = 100; //number of recent deaths to keep track of for s
 
 // what is the display size of a baby (relative to an adult) (e.g. 10% of adult size, then 0.1)
 const babySize = 0.3 
-// at what age are animals fullgrown?
 
 //Feature to consider:
 //predation
@@ -35,12 +34,10 @@ function draw2() {
         drawCell(world, cell);
     }
     
-
     let deadHeap:Animal[] = [];
     for(let animal of world.Animals) {
         animal.takeTurn(world);
         animal.addAge(world.Settings.TickDuration);
-        //if (!animal.Alive && animal.DeadDuration >= animal.MaxDeadDuration ) {
         if (!animal.Alive && animal.DeadDuration >= world.Settings.MaxDeadDuration) {
             deadHeap.push(animal);
         } else {
@@ -66,30 +63,8 @@ function draw2() {
         }
     }
 }
+
 class World {
-    Pop: number = -1;
-    Settings:Settings = new Settings();
-    ItIsSummer:boolean = true; //starts true, may or may not ever change, depending on settings.
-    SeasonDay:number = 0; //today is the nth day of the current season.
-    tryAddAnimal():boolean {
-        let col = rando(this.Settings.Columns);
-        let row = rando(this.Settings.Rows);
-        let age = rando(100);
-        let initialEnergy = 100;
-        return this.addAnimal(col, row, age, initialEnergy);
-    }
-    addAnimal(col:number, row:number, age:number, initialEnergy:number):boolean {
-        let cell = this.getCell(col, row);
-        if (cell.Animal == null) {
-            var animal = new Animal(col, row,age, initialEnergy);
-            this.Animals.push(animal);
-            cell.Animal = animal;
-            return true;
-        } else {
-            //console.log("ALREADY an animal there!");
-            return false;
-        }
-    }
     constructor(
         canvasWidth:number,
         canvasHeight:number,
@@ -117,23 +92,43 @@ class World {
         console.log(this);
     }
 
+    Pop: number = -1;
+    Settings:Settings = new Settings();
+    ItIsSummer:boolean = true; //starts true, may or may not ever change, depending on settings.
+    SeasonDay:number = 0; //today is the nth day of the current season.
     Tick:number = 0;
     WidthOfCell:number;
     HeightOfCell:number;
-    //Columns:number;
-    //Rows:number;
     CanvasWidth:number;
     CanvasHeight:number;
     Cells:Cell[];
     Animals:Animal[];
     Trails:boolean = false;
-    //EnergyRate:number = ENERGY_RATE;
-    //TickDuration:number = TICK_DURATION;
+
+    tryAddAnimal():boolean {
+        let col = rando(this.Settings.Columns);
+        let row = rando(this.Settings.Rows);
+        let age = rando(100);
+        let initialEnergy = 100;
+        return this.addAnimal(col, row, age, initialEnergy);
+    }
+    addAnimal(col:number, row:number, age:number, initialEnergy:number):boolean {
+        let cell = this.getCell(col, row);
+        if (cell.Animal == null) {
+            var animal = new Animal(col, row,age, initialEnergy);
+            this.Animals.push(animal);
+            cell.Animal = animal;
+            return true;
+        } else {
+            return false;
+        }
+    }
+    
     getCell(col:number, row:number):Cell {
         return this.Cells[col + (row*this.Settings.Columns)];
     }
 
-    //get the 8 cells that surround this cell -- return them in random order.
+    // get the 8 cells that surround this cell and return them in random order.
     getNeighborCells(col:number, row:number):Cell[] {
         let result:Cell[] = [];
         //TODO: a neighborhood could be a larger area, consider 3x3, 5x5, 7x7... 
@@ -151,24 +146,13 @@ class World {
                 if (newY >= this.Settings.Rows) newY = this.Settings.Rows - newY;
                 if (offsetX != 0 || offsetY != 0) // ignore current tile...
                 {
-                    //console.log(`newX, newY: ${newX}, ${newY} -- is cell number... ${newX + (newY*this.Columns)}`)
-                    var cell = this.getCell(newX, newY);//this.Cells[newX + (newY*this.Columns)];
-                    //if (cell.Col == newX && cell.Row == newY) {
-                    //    //console.log("As expected...");
-                    //} else {
-                    //    //console.log(`Expected: col,row: ${newX}, ${newY}, found: ${cell.Col},${cell.Row}`);
-                    //}
+                    var cell = this.getCell(newX, newY);
                     result.push(cell);
                 }
             }
         }
         return shuffle(result);
     }
-}
-
-//a single population? multiple pops??
-class Population {
-
 }
 
 class Cell {
@@ -178,7 +162,6 @@ class Cell {
         this.Energy = rando(100);
     }
     color():string {
-        //return `rgba(0, ${Math.floor(this.Energy * 2.55)}, 0, 0.7)`;
         return `hsla(120, 69%, ${Math.floor((this.Energy*0.4)+5)}%, 0.9)`;
     }
     Col:number;
@@ -186,18 +169,14 @@ class Cell {
     Energy:number;
     Animal:Animal;
     addEnergy(amount:number):number {
-
         let initialEnergy = this.Energy;
         //cannot be less than zero, cannot be greater than 100.
         this.Energy = Math.max(0, Math.min(100, this.Energy+amount));
         return (this.Energy - initialEnergy); //how much difference did it make;
-        //return this.Energy - amount;
     }
 }
-function drawCell(world:World, cell:Cell) {
-    //TODO: color of cell!
-    //ctx.fillStyle = 'orange';
 
+function drawCell(world:World, cell:Cell) {
     ctx.fillStyle = cell.color();
 	ctx.beginPath();
     ctx.fillRect(
@@ -207,6 +186,7 @@ function drawCell(world:World, cell:Cell) {
         world.HeightOfCell);
     ctx.stroke();
 }
+
 class Animal {
     takeTurn(world: World) {
         if (!this.Alive) return;
@@ -244,10 +224,10 @@ class Animal {
             }
 
             //eat some energy...
-            let munchAmount = this.Genes[gene.MunchAmount];
-            if (this.Energy + munchAmount > (this.Genes[gene.MaxEnergy]*world.Settings.EnergyUpscaleFactor)){
+            let munchAmount = this.Genes.MunchAmount;
+            if (this.Energy + munchAmount > (this.Genes.MaxEnergy*world.Settings.EnergyUpscaleFactor)){
                 // don't try to eat more than you can store!
-                munchAmount = (this.Genes[gene.MaxEnergy]*world.Settings.EnergyUpscaleFactor) - this.Energy;
+                munchAmount = (this.Genes.MaxEnergy*world.Settings.EnergyUpscaleFactor) - this.Energy;
             }
 
             //and you can't eat more than the cell can give you!
@@ -256,8 +236,8 @@ class Animal {
             //console.log(`munch amount: ${munchAmount}`);
             this.Energy += munchAmount;
 
-            if (this.Energy > (this.Genes[gene.MaxEnergy]*world.Settings.EnergyUpscaleFactor)) {
-                console.log(`I have more energy than I thought possible! munched:${munchAmount} new_energy:${this.Energy} max:${this.Genes[gene.MaxEnergy]}`);
+            if (this.Energy > (this.Genes.MaxEnergy*world.Settings.EnergyUpscaleFactor)) {
+                console.log(`I have more energy than I thought possible! munched:${munchAmount} new_energy:${this.Energy} max:${this.Genes.MaxEnergy}`);
             }
         } else {
             //standing still...
@@ -266,26 +246,23 @@ class Animal {
             this.Energy -= standingStillEnergy;
             if (this.Energy <= 0){
                 this.Alive = false;
-                //console.log("Died of exhaustion.");
                 causeOfDeathNatural.push(false);
                 while(causeOfDeathNatural.length > deathsToTrack) causeOfDeathNatural.splice(0,1);
                 return;
-            } else {
-                //console.log("Moved");
             }
         }
+
         neighbors = world.getNeighborCells(this.Col, this.Row);
         this.considerMating(neighbors);
     }
 
     considerMating(cells:Cell[]) {
-        if (this.Age < this.Genes[gene.AgeOfMaturity]) return;
-        
-        if (this.Energy < this.Genes[gene.MinMatingEnergy]) return;
-        if (this.Energy < this.Genes[gene.EnergyToChild]) return;
+        if (this.Age < this.Genes.AgeOfMaturity) return;        
+        if (this.Energy < this.Genes.MinMatingEnergy) return;
+        if (this.Energy < this.Genes.EnergyToChild) return;
 
         //if their mating percent is just 10%... then 90% of the time they'll exit here.
-        if (rando(100) > this.Genes[gene.MatingPercent]) return;
+        if (rando(100) > this.Genes.MatingPercent) return;
         // this means that 10% of the time, they are willing to consider mating.
         // whether or not they run into anyone... that's a different issue.
         
@@ -296,8 +273,8 @@ class Animal {
                 // criteria to be a suitable mate:
                 if (cell.Animal.Alive  // picky
                     && cell.Animal.Id != this.Id // avoid blindness
-                    && cell.Animal.Age > cell.Animal.Genes[gene.AgeOfMaturity]
-                    && cell.Animal.AdvertisedEnergy() > this.Genes[gene.MinimumAcceptableEnergyInAMate]) {
+                    && cell.Animal.Age > cell.Animal.Genes.AgeOfMaturity
+                    && cell.Animal.AdvertisedEnergy() > this.Genes.MinimumAcceptableEnergyInYourMate) {
                     neighbors.push(cell.Animal);
                 }
             } else {
@@ -313,18 +290,16 @@ class Animal {
         //TODO: only consider mating if the area is not overcrowded.
         //TODO: only consider mating if you have enough energy
         //TODO: rank the suitors by most energy.
-        //TODO: have other ways of ranking suitors
+        //TODO: have other strategies for ranking suitors
         //TODO: suitors have their energy, but also: how much energy they advertise.
         
         let potentialMate = neighbors[0];
-        //TODO: perform cross over of genes;
-
-        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.Genes[gene.EnergyToChild]);
+        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.Genes.EnergyToChild);
         let child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
         child.Generation = (this.Generation + potentialMate.Generation)/2 + 1;
         child.Genes = Crossover(this.Genes, potentialMate.Genes);
         //child.Energy = this.EnergyToChild;
-        this.Energy -= this.Genes[gene.EnergyToChild];
+        this.Energy -= this.Genes.EnergyToChild;
     }
     AdvertisedEnergy() {
         //todo: consider displaying a different amount of energy.
@@ -333,10 +308,9 @@ class Animal {
     }
 
     addAge(tickDuration: number) {
-        //this.Age = Math.min(this.MaxAge, this.Age+tickDuration);
         this.Age = Math.min(world.Settings.MaxAge, this.Age+tickDuration);
         
-        //this.Size = babySize + ((1.0 - babySize)*(this.Age / this.MaxAge)); //from 0..1.0
+        //babySize is a fraction, e.g. 0.3, so that babies are not a tiny spec, but start at 30% of final size.
         this.Size = babySize + ((1.0 - babySize)*(this.Age / world.Settings.MaxAge)); //from 0..1.0
         //if (this.Age >= this.MaxAge) {
         if (this.Age >= world.Settings.MaxAge) {
@@ -346,10 +320,10 @@ class Animal {
             while(causeOfDeathNatural.length > deathsToTrack) causeOfDeathNatural.splice(0,1);
         }
         if (!this.Alive) {
-            //this.DeadDuration = Math.min(this.MaxDeadDuration, this.DeadDuration+tickDuration);
             this.DeadDuration = Math.min(world.Settings.MaxDeadDuration, this.DeadDuration+tickDuration);
         }
     }
+
     constructor(col:number, row:number, age:number, initialEnergy:number) {
         this.Col = col;
         this.Row = row;
@@ -367,7 +341,7 @@ class Animal {
             //console.log(color);
             return color;
         }
-        return `hsla(${Math.floor(this.Genes[gene.Hugh]*3.6)}, ${Math.floor(this.Genes[gene.Saturation])}%, ${Math.floor(this.Genes[gene.Lightness]*0.6)}%, 0.9)`;
+        return `hsla(${Math.floor(this.Genes.Hugh*3.6)}, ${Math.floor(this.Genes.Saturation)}%, ${Math.floor(this.Genes.Lightness*0.6)}%, 0.9)`;
         //return 'rgba(12,100,200, 0.9)';
     }
     Generation:number = 0;
@@ -375,15 +349,11 @@ class Animal {
     Row:number;
     Size:number;
     Age:number; //when age = maxage... they die.
-    //MaxAge:number = 100;
     Alive:boolean = true;
     DeadDuration:number = 0; //if dead... how long have they been dead?
-    //MaxDeadDuration:number = 5; //how long does the body take to decompose
     Energy:number = 100;
     Id:number;
-    Genes: EnumDictionary<gene, number>;
-    
-    //Genes: {[id: gene]: number};
+    Genes:Genes;
 }
 
 function drawAnimal(world:World, animal:Animal) {
@@ -399,34 +369,30 @@ function drawAnimal(world:World, animal:Animal) {
     ctx.stroke();
 }
 
-function getDefaultGenes():EnumDictionary<gene, number> {
-    return _defaultGenes; /*{
-        [gene.MatingPercent]: 3, // what percent of the time are you thinking about mating
-        [gene.MinMatingEnergy]: 70, //if less than this much energy, don't consider mating
-        [gene.EnergyToChild]:20, // how much energy does a child start with
-        [gene.MunchAmount]:25, //how much energy will they try to extract from the ground each chance they get
-        [gene.AgeOfMaturity]:10, //how old do they have to be before they can mate
-        [gene.MinimumAcceptableEnergyInAMate]:1, //a pulse will do
-        [gene.MaxEnergy]:50
-    };*/
+function getDefaultGenes() {
+    return _defaultGenes;
 }
-
 
 let ss="";
 let deaths = "";
 function showStats() {
-    //let pop = world.Animals.length;
-    //todo: average energy
-    //todo: average of each gene.
     //todo: ability to expand/collapse the stats.
 
-    let averageGenes:number[] = [0,0,0,0,0,0,0,0,0,0];
-    let minGenes:number[] = [-1,-1,-1,-1,-1,-1,-1,-1,-1,-1];
-    let maxGenes:number[] = [0,0,0,0,0,0,0,0,0,0];
+    let averageGenes:Genes = new Genes();
+    let minGenes:Genes = new Genes();
+    let maxGenes:Genes = new Genes();
+
+    for(var prop of Object.getOwnPropertyNames(averageGenes)){
+        averageGenes[prop] = 0;
+        minGenes[prop] = -1;
+        maxGenes[prop] = 0;
+    }
+
     let pop = 0;
     let averageEnergy:number = 0;
     let averageGeneration:number = 0;
     let averageAge:number = 0;
+    let geneNames:string[] = [];
     for(let a of world.Animals) {
         if (a.Alive){
             pop++;
@@ -434,19 +400,21 @@ function showStats() {
             averageGeneration+=a.Generation;
             averageAge+=a.Age;
             if (world.Tick % 50 == 1) {
-                for (let [key, value] of Object.entries(a.Genes)) {
-                    averageGenes[key] += value;
-                    if (minGenes[key] == -1 || value < minGenes[key]) minGenes[key] = value;
-                    if (value > maxGenes[key]) maxGenes[key] = value;
+                for(var prop of Object.getOwnPropertyNames(a.Genes)) {
+                    let value = a.Genes[prop];
+                    geneNames.push(prop);
+                    averageGenes[prop] += value;
+                    if (minGenes[prop] == -1 || value < minGenes[prop]) minGenes[prop] = value;
+                    if (value > maxGenes[prop]) maxGenes[prop] = value;
                 }
             }
         }
     }
     if (world.Tick % 50 == 1){
         ss = "";
-        for(let k in averageGenes){
-            averageGenes[k] = averageGenes[k]/pop;
-            ss += `${toWords(geneNames[k])}: ${averageGenes[k].toFixed(3)} (${minGenes[k].toFixed(3)} - ${maxGenes[k].toFixed(3)})<br />`;
+        for(var prop of Object.getOwnPropertyNames(averageGenes)){
+            averageGenes[prop] = averageGenes[prop]/pop;
+            ss += `${toWords(prop)}: ${averageGenes[prop].toFixed(3)} (${minGenes[prop].toFixed(3)} - ${maxGenes[prop].toFixed(3)})<br />`;
         }
 
         if (causeOfDeathNatural.length > 0) {
@@ -460,12 +428,12 @@ function showStats() {
     }
 
     world.Pop  = pop;
-
     let season = "winter";
     if (world.Settings.IsAlwaysSummer || world.ItIsSummer) season="summer";
     if (!world.Settings.IsAlwaysSummer) season+=` (day ${world.SeasonDay} of ${world.Settings.SeasonLength})`;
     $id('stats').innerHTML = `pop: ${pop}<br/>tick: ${world.Tick}<br/>energy rate: ${world.Settings.EnergyRate.toFixed(3)}<br/>season: ${season}<br/>${deaths}<br />avg energy: ${(averageEnergy/pop).toFixed(2)}<br />avg gen:  ${(averageGeneration/pop).toFixed(2)}<br />avg age:  ${(averageAge/pop).toFixed(2)}<br />${ss}`;   
 }
+
 /* utility functions */
 let id = 0;
 function newId():number {
@@ -499,16 +467,16 @@ function $id(id: string): HTMLElement {
 //add the class of className to all elements that match the selector
 function addClass(selector: string, className: string) {
     for(const example of $(selector)) {
-      example.classList.add(className);
+        example.classList.add(className);
     }
-  }
+}
   
-  //remove the class className from all elements that match the selector
-  function removeClass(selector: string, className: string) {
+//remove the class className from all elements that match the selector
+function removeClass(selector: string, className: string) {
     for(const example of $(selector)) {
-      example.classList.remove(className);
+        example.classList.remove(className);
     }
-  }
+}
   
 // remove the class of className from all elements that have a class of className
 function removeAllClass(className: string) {
@@ -524,25 +492,16 @@ function toWords(pascally:string) {
 
 /* gene types */
 
-function Crossover(parent1Genes:EnumDictionary<gene, number>, parent2Genes:EnumDictionary<gene, number>):EnumDictionary<gene, number> {
-    //todo: return genes;
-    let newGenes = {
-        [gene.MatingPercent]: CombineGene(parent1Genes[gene.MatingPercent],parent2Genes[gene.MatingPercent]),
-        [gene.MinMatingEnergy]: CombineGene(parent1Genes[gene.MinMatingEnergy],parent2Genes[gene.MinMatingEnergy]),
-        [gene.EnergyToChild]: CombineGene(parent1Genes[gene.EnergyToChild],parent2Genes[gene.EnergyToChild]),
-        [gene.MunchAmount]: CombineGene(parent1Genes[gene.MunchAmount],parent2Genes[gene.MunchAmount]),
-        [gene.AgeOfMaturity]: CombineGene(parent1Genes[gene.AgeOfMaturity],parent2Genes[gene.AgeOfMaturity]),
-        [gene.MinimumAcceptableEnergyInAMate]: CombineGene(parent1Genes[gene.MinimumAcceptableEnergyInAMate],parent2Genes[gene.MinimumAcceptableEnergyInAMate]),        
-        [gene.MaxEnergy]: CombineGene(parent1Genes[gene.MaxEnergy],parent2Genes[gene.MaxEnergy]),
-        [gene.Hugh]: CombineGene(parent1Genes[gene.Hugh],parent2Genes[gene.Hugh]),
-        [gene.Saturation]: CombineGene(parent1Genes[gene.Saturation],parent2Genes[gene.Saturation]),
-        [gene.Lightness]: CombineGene(parent1Genes[gene.Lightness],parent2Genes[gene.Lightness]),
-    };
+function Crossover(parent1Genes:Genes, parent2Genes:Genes):Genes {
+    var genes = new Genes();
+    for(var prop of Object.getOwnPropertyNames(parent1Genes)) {
+        genes[prop] = CombineGene(parent1Genes[prop], parent2Genes[prop]);
+    }
     
-    return newGenes;
+    return genes;
 }
+
 function CombineGene(gene1:number, gene2:number):number {
-    
     let result = gene1;
     let coin = rando(100);
     if (coin<50) result = gene2;
@@ -557,36 +516,21 @@ function CombineGene(gene1:number, gene2:number):number {
     return result;
 }
 
-type EnumDictionary<T extends string | symbol | number, U> = {
-    [K in T]: U;
-};
+class Genes {
+    MatingPercent:number = 3; // what percent of the time are you thinking about mating
+    MinMatingEnergy:number =70; //if less than this much energy, don't consider mating
+    EnergyToChild:number =20; // how much energy does a child start with
+    MunchAmount:number =25; //how much energy will they try to extract from the ground each chance they get
+    AgeOfMaturity:number =10; //how old do they have to be before they can mate
+    MinimumAcceptableEnergyInYourMate:number =1; //a pulse will do
+    MaxEnergy:number =50;
+    Hugh:number =50;
+    Saturation:number =50;
+    Lightness:number =100;
+}
 
-enum gene {
-    MatingPercent = 0, // what percent of the time are you thinking about mating
-    MinMatingEnergy, //if less than this much energy, don't consider mating
-    EnergyToChild, // how much energy does a child start with.
-    MunchAmount, //how much energy will they try to extract from the ground each chance they get
-    AgeOfMaturity, //how old do they have to be before they can mate
-    MinimumAcceptableEnergyInAMate, //a pulse will do
-    MaxEnergy, //the maximum amount of energy this creature will ever have.
-    Hugh, //color
-    Saturation,
-    Lightness,
-};
-var geneNames = ["MatingPercent","MinMatingEnergy","EnergyToChild","MunchAmount","AgeOfMaturity","MinimumAcceptableEnergyInAMate","MaxEnergy","Hugh","Saturation","Lightness"]
+const _defaultGenes = new Genes();
 
-let _defaultGenes:EnumDictionary<gene, number> = {
-    [gene.MatingPercent]: 3, // what percent of the time are you thinking about mating
-    [gene.MinMatingEnergy]: 70, //if less than this much energy, don't consider mating
-    [gene.EnergyToChild]:20, // how much energy does a child start with
-    [gene.MunchAmount]:25, //how much energy will they try to extract from the ground each chance they get
-    [gene.AgeOfMaturity]:10, //how old do they have to be before they can mate
-    [gene.MinimumAcceptableEnergyInAMate]:1, //a pulse will do
-    [gene.MaxEnergy]:50,
-    [gene.Hugh]:50,
-    [gene.Saturation]:50,
-    [gene.Lightness]:100
-};
 /* end gene types */
 
 /* world parameters */
@@ -624,9 +568,8 @@ class Settings {
 function populateGeneForm(id:string){
     var genes = getDefaultGenes();
     var ss = "<h1>Default (starting) gene values</h1><br />";
-
-    for (let [key, value] of Object.entries(genes)) {
-        ss+=`<span class='label'>${toWords(geneNames[key])}</span><input type='text' id='${geneNames[key]}' value='${value}' /><br />`;
+    for(var prop of Object.getOwnPropertyNames(genes)) {
+        ss+=`<span class='label'>${toWords(prop)}</span><input type='text' id='${prop}' value='${genes[prop]}' /><br />`;
     }
 
     $id(id).innerHTML = ss;
@@ -642,20 +585,23 @@ function populateWorldForm(id:string) {
             ss+=`<label class='label' for='${p}'>${toWords(p)}</label><input type=checkbox id='${p}' name='${p}' ${(settings[p]?'checked=checked':'')} /><br />`;
         }
     }
+
     $id(id).innerHTML = ss;
 }
 
 function readGeneForm(id:string){
     var ss = "";
-
+    var genes  = getDefaultGenes();
     //Updates the default genes!
-    for (let [key, value] of Object.entries(_defaultGenes)) {
-        
-        _defaultGenes[key] = parseFloat((<HTMLInputElement>$id(geneNames[key])).value);
-        ss+=`_defaultGenes[${key}] = parseFloat((<HTMLInputElement>$id('${geneNames[key]}')).value); //${parseFloat((<HTMLInputElement>$id(geneNames[key])).value)}\r\n`;
+
+    for(var prop of Object.getOwnPropertyNames(genes)){
+        genes[prop] = parseFloat((<HTMLInputElement>$id(prop)).value);
+        ss+=`_defaultGenes[${prop}] = parseFloat((<HTMLInputElement>$id('${prop}')).value); //${parseFloat((<HTMLInputElement>$id(prop)).value)}\r\n`;
     }
+
     console.log(ss);
 }
+
 function readWorldForm(id:string){
     var ss = "";
     var settings = world.Settings;
@@ -697,11 +643,9 @@ document.addEventListener("DOMContentLoaded", function () {
         }, false);*/
         
         $id('up').addEventListener('click', function() { 
-            //alert('up');
             world.Settings.EnergyRate = world.Settings.EnergyRate * 1.05;
         }, false);
         $id('down').addEventListener('click', function() { 
-            //alert('up');
             world.Settings.EnergyRate = world.Settings.EnergyRate * 0.96;
         }, false);
 
