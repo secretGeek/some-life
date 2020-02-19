@@ -15,13 +15,16 @@ function draw2() {
         ctx.clearRect(0, 0, canvas.width, canvas.height);
     world.Tick++;
     world.SeasonDay++;
-    if (world.SeasonDay == world.Settings.SeasonLength) {
+    if (world.SeasonDay >= world.SeasonLength) {
         world.ItIsSummer = !world.ItIsSummer;
         //this causes a strange seasonal change I find intriguing...
         if (world.Settings.DoSeasonsGetLonger)
-            world.Settings.SeasonLength++;
+            world.SeasonLength++;
+        //in case the setting has been altered to a non-integer value... round it now.
         if (world.Settings.MaxSeasonLength > 0)
-            world.Settings.SeasonLength = Math.min(world.Settings.MaxSeasonLength, world.Settings.SeasonLength);
+            world.Settings.MaxSeasonLength = Math.floor(world.Settings.MaxSeasonLength);
+        if (world.Settings.MaxSeasonLength > 0)
+            world.SeasonLength = Math.min(world.Settings.MaxSeasonLength, world.SeasonLength);
         world.SeasonDay = 0;
     }
     for (var _i = 0, _a = world.Cells; _i < _a.length; _i++) {
@@ -42,15 +45,16 @@ function draw2() {
             drawAnimal(world, animal);
         }
     }
-    for (var deadIndex in deadHeap) {
-        var deady = deadHeap[deadIndex];
+    for (var _d = 0, deadHeap_1 = deadHeap; _d < deadHeap_1.length; _d++) {
+        var deady = deadHeap_1[_d];
+        //let deady = deadHeap[deadIndex];
         var cell = world.getCell(deady.Col, deady.Row);
         cell.Animal = null;
         var index = world.Animals.indexOf(deady);
         world.Animals.splice(index, 1);
-        // and it's gone!
+        // poof! and it's gone!
     }
-    if (world.Pop != 0) {
+    if (world.Pop != 0 && !paused) {
         showStats();
         if (world.Settings.Delay == 0) {
             requestAnimationFrame(draw2);
@@ -73,25 +77,28 @@ var World = /** @class */ (function () {
     }
     World.prototype.initialize = function () {
         this.Cells = [];
-        this.WidthOfCell = this.CanvasWidth / this.Settings.Columns;
-        this.HeightOfCell = this.CanvasHeight / this.Settings.Rows;
-        for (var row = 0; row < this.Settings.Rows; row++) {
-            for (var col = 0; col < this.Settings.Columns; col++) {
+        this.Columns = Math.floor(this.Settings.InitialColumns);
+        this.Rows = Math.floor(this.Settings.InitialRows);
+        this.WidthOfCell = this.CanvasWidth / this.Columns;
+        this.HeightOfCell = this.CanvasHeight / this.Rows;
+        for (var row = 0; row < this.Rows; row++) {
+            for (var col = 0; col < this.Columns; col++) {
                 var cell = new Cell(col, row);
                 this.Cells.push(cell);
             }
         }
-        console.log("For squarer cells, keep #rows and set cols to: " + ((this.CanvasWidth / this.CanvasHeight) * this.Settings.Rows));
-        console.log("...or keep # cols and set rows to: " + ((this.CanvasHeight / this.CanvasWidth) * this.Settings.Columns));
+        console.log("For squarer cells, keep #rows and set cols to: " + ((this.CanvasWidth / this.CanvasHeight) * this.Rows));
+        console.log("...or keep # cols and set rows to: " + ((this.CanvasHeight / this.CanvasWidth) * this.Columns));
         this.Animals = [];
-        while (this.Animals.length < this.Settings.StartingPopulationSize) {
+        this.SeasonLength = Math.floor(this.Settings.InitialSeasonLength);
+        while (this.Animals.length < this.Settings.InitialPopulationSize) {
             this.tryAddAnimal();
         }
         console.log(this);
     };
     World.prototype.tryAddAnimal = function () {
-        var col = rando(this.Settings.Columns);
-        var row = rando(this.Settings.Rows);
+        var col = rando(this.Columns);
+        var row = rando(this.Rows);
         var age = rando(100);
         var initialEnergy = 100;
         return this.addAnimal(col, row, age, initialEnergy);
@@ -109,7 +116,7 @@ var World = /** @class */ (function () {
         }
     };
     World.prototype.getCell = function (col, row) {
-        return this.Cells[col + (row * this.Settings.Columns)];
+        return this.Cells[col + (row * this.Columns)];
     };
     // get the 8 cells that surround this cell and return them in random order.
     World.prototype.getNeighborCells = function (col, row) {
@@ -122,13 +129,13 @@ var World = /** @class */ (function () {
                 var newX = col + offsetX;
                 var newY = row + offsetY;
                 if (newX < 0)
-                    newX = this.Settings.Columns + newX; //wrap...
+                    newX = this.Columns + newX; //wrap...
                 if (newY < 0)
-                    newY = this.Settings.Rows + newY; //...around!
-                if (newX >= this.Settings.Columns)
-                    newX = this.Settings.Columns - newX;
-                if (newY >= this.Settings.Rows)
-                    newY = this.Settings.Rows - newY;
+                    newY = this.Rows + newY; //...around!
+                if (newX >= this.Columns)
+                    newX = this.Columns - newX;
+                if (newY >= this.Rows)
+                    newY = this.Rows - newY;
                 if (offsetX != 0 || offsetY != 0) // ignore current tile...
                  {
                     var cell = this.getCell(newX, newY);
@@ -398,8 +405,73 @@ function showStats() {
     if (world.Settings.IsAlwaysSummer || world.ItIsSummer)
         season = "summer";
     if (!world.Settings.IsAlwaysSummer)
-        season += " (day " + world.SeasonDay + " of " + world.Settings.SeasonLength + ")";
-    $id('stats').innerHTML = "pop: " + pop + "<br/>tick: " + world.Tick + "<br/>energy rate: " + world.Settings.EnergyRate.toFixed(3) + "<br/>season: " + season + "<br/>" + deaths + "<br />avg energy: " + (averageEnergy / pop).toFixed(2) + "<br />avg gen:  " + (averageGeneration / pop).toFixed(2) + "<br />avg age:  " + (averageAge / pop).toFixed(2) + "<br />" + ss;
+        season += " (day " + world.SeasonDay + " of " + world.SeasonLength + ")";
+    //var energy rate: ${world.Settings.EnergyRate.toFixed(3)}<br/>
+    //season: ${season}<br/>
+    //var worldSettings = "";
+    if (worldSettingsChanged) {
+        worldSettings = "";
+        var settings = world.Settings;
+        for (var _j = 0, _k = Object.getOwnPropertyNames(settings); _j < _k.length; _j++) {
+            var p = _k[_j];
+            worldSettings += toWords(p) + ": ";
+            if ((typeof settings[p]) == 'number') {
+                worldSettings += "<input type='button' class='set_the_controls' value='+' title='increase' onclick='inc(\"" + p + "\");' /> " + settings[p].toFixed(2) + " <input type='button' value='-' class='set_the_controls' title='decrease' onclick='dec(\"" + p + "\");' />";
+            }
+            else {
+                //boolean
+                worldSettings += settings[p] + " <input type='button' value='/' class='set_the_controls' title='toggle' onclick='toggle(\"" + p + "\");' />";
+            }
+            worldSettings += '<br/>';
+        }
+        worldSettingsChanged = false;
+    }
+    $id('stats').innerHTML = "\npopulation: " + pop + "<br/>\ntick: " + world.Tick + "<br/>\n" + season + "<br/>\n" + worldSettings + "<br/>\n" + deaths + "<br />\navg energy: " + (averageEnergy / pop).toFixed(2) + "<br />\navg gen:  " + (averageGeneration / pop).toFixed(2) + "<br />\navg age:  " + (averageAge / pop).toFixed(2) + "<br />\n" + ss;
+    if (!paused) {
+        removeClass(".set_the_controls", "for_the");
+    }
+    else {
+        addClass(".set_the_controls", "for_the");
+    }
+}
+var paused = false;
+function pause(x) {
+    console.log("PAUAUAUAUAUASEEE");
+    paused = !paused;
+    x.value = (paused ? "play" : "pause");
+    if (!paused) {
+        removeClass(".set_the_controls", "for_the");
+        draw2();
+    }
+    else {
+        addClass(".set_the_controls", "for_the");
+    }
+}
+var worldSettings = "";
+var worldSettingsChanged = true;
+function inc(p) {
+    console.log(p);
+    console.log(world.Settings);
+    world.Settings[p] = world.Settings[p] * 1.05;
+    worldSettingsChanged = true;
+    if (paused)
+        showStats();
+}
+function dec(p) {
+    console.log(p);
+    console.log(world.Settings);
+    world.Settings[p] = world.Settings[p] * 0.96;
+    worldSettingsChanged = true;
+    if (paused)
+        showStats();
+}
+function toggle(p) {
+    console.log(p);
+    console.log(world.Settings);
+    world.Settings[p] = !(world.Settings[p]);
+    worldSettingsChanged = true;
+    if (paused)
+        showStats();
 }
 /* utility functions */
 var id = 0;
@@ -500,11 +572,11 @@ var _defaultGenes = new Genes();
 /* world parameters */
 var Settings = /** @class */ (function () {
     function Settings() {
-        this.StartingPopulationSize = 120;
-        this.Columns = 80;
-        this.Rows = 40;
+        this.InitialPopulationSize = 120;
+        this.InitialColumns = 80;
+        this.InitialRows = 40;
         this.IsAlwaysSummer = false;
-        this.SeasonLength = 20;
+        this.InitialSeasonLength = 20; // seasons are initially this length (unless 'is always summer' is true)
         this.DoSeasonsGetLonger = true;
         this.MaxSeasonLength = 220;
         this.MaxAge = 100; //How long do animals live
@@ -587,18 +659,13 @@ document.addEventListener("DOMContentLoaded", function () {
         world = new World(canvas.clientWidth, canvas.clientHeight);
         readWorldForm('worldForm');
         world.initialize();
+        // hide the forms, and the go button.
         $id('geneForm').classList.add('hidden');
         $id('worldForm').classList.add('hidden');
         $id('go').classList.add('hidden');
         /*canvas.addEventListener('click', function() {
             world.getNeighborCells(5,5);
         }, false);*/
-        $id('up').addEventListener('click', function () {
-            world.Settings.EnergyRate = world.Settings.EnergyRate * 1.05;
-        }, false);
-        $id('down').addEventListener('click', function () {
-            world.Settings.EnergyRate = world.Settings.EnergyRate * 0.96;
-        }, false);
         draw2();
     });
 }, false);
