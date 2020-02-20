@@ -22,7 +22,7 @@ canvas {
 	z-index:100;
 	right:5px;
 	max-width:50%;
-	top:30px;
+	top:35px;
 	text-align:right;
 	margin-right:5px;
   color:#DDD;
@@ -32,8 +32,33 @@ canvas {
 .hidden,.startHidden {
 	display:none;
 }
-input[type=button]#go{
+#go,#pause{
 	padding:20px;
+	cursor: pointer;
+	text-align: center;
+	text-decoration: none;
+	outline: none;
+	color: #fff;
+	background-color: #333;
+	border: none;
+	border-radius: 15px;
+	box-shadow: 0 9px #555,	0 9px 8px #830;
+}
+#pause {
+ padding:5px;
+ box-shadow: 0 5px #555, 0 5px 5px #830;
+ min-width:50px;
+}
+#go:active,#pause:active {
+  background-color: #444;
+  box-shadow: 0 5px #333, 0 5px 8px #F60;
+  transform: translateY(4px);
+}
+
+#pause:active{
+  box-shadow: 0 3px #333, 0 3px 5px #F60;
+  transform: translateY(2px);
+
 }
 form#geneForm,form#worldForm,#go {
 	margin:20px;
@@ -65,6 +90,9 @@ input[type=text] {
  opacity:0.6;
  font-size:8pt;
  line-height:0.8em;
+ border-radius:5px;
+ border:none;
+ box-shadow:0 2px #444;
 }
 .set_the_controls.for_the:hover {
 opacity:1.0;
@@ -77,24 +105,17 @@ opacity:1.0;
  z-index:100;
  max-height:20px;
 }
+
 </style>
 
-<input id='pause' type='button' value='pause' onclick='pause(this);' class='startHidden'/>
-
+<input id='pause' class='startHidden' type='button' value='pause' onclick='pause(this);'/>
 <span id='stats' class='startHidden'>pop:3</span>
 
-<form id='geneForm'>
-
-
-</form>
-<form id='worldForm'>
-
-
-</form>
-
 <input type='button' id='go' value='GO'></input>
+<form id='geneForm'></form>
+<form id='worldForm'></form>
 
-<canvas id="html-canvas" class='startHidden'>
+<canvas id="html-canvas" class='startHidden' />
 </body>
 <script src='life.js?3' type="text/javascript"></script>
 </html>

@@ -315,12 +315,12 @@ class Animal {
     }
 
     addAge(tickDuration: number) {
-        this.Age = Math.min(world.Settings.MaxAge, this.Age+tickDuration);
+        this.Age = Math.min(this.MaxAge, this.Age+tickDuration);
         
         //babySize is a fraction, e.g. 0.3, so that babies are not a tiny spec, but start at 30% of final size.
         this.Size = babySize + ((1.0 - babySize)*(this.Age / world.Settings.MaxAge)); //from 0..1.0
         //if (this.Age >= this.MaxAge) {
-        if (this.Age >= world.Settings.MaxAge) {
+        if (this.Age >= this.MaxAge) {
             this.Alive = false;
             //console.log("Died of old age.");
             causeOfDeathNatural.push(true);
@@ -339,6 +339,11 @@ class Animal {
         this.Energy = initialEnergy; 
         this.Id = newId();
         this.Genes = getDefaultGenes();
+        this.MaxAge = Math.floor(world.Settings.MaxAge * 0.80 + rando(world.Settings.MaxAge * 0.4));
+        if (this.Age >= this.MaxAge) {
+            this.Age = this.MaxAge - 1;
+            if (this.Age < 0) this.Age = 0;
+        }
     }
     color():string {
         if (!this.Alive) {
@@ -356,6 +361,7 @@ class Animal {
     Row:number;
     Size:number;
     Age:number; //when age = maxage... they die.
+    MaxAge:number; //will be based on world.MaxAge but not exactly...
     Alive:boolean = true;
     DeadDuration:number = 0; //if dead... how long have they been dead?
     Energy:number = 100;
