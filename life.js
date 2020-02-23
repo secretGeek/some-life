@@ -174,7 +174,9 @@ var Animal = /** @class */ (function () {
     function Animal(col, row, age, initialEnergy) {
         this.Generation = 0;
         this.Alive = true;
+        this.NaturalCauses = null; // did we die from natural causes or other?
         this.DeadDuration = 0; //if dead... how long have they been dead?
+        this.IGotHit = 0;
         this.Energy = 100;
         this.Col = col;
         this.Row = row;
@@ -183,7 +185,7 @@ var Animal = /** @class */ (function () {
         this.Energy = initialEnergy;
         this.Id = newId();
         this.Genes = getDefaultGenes();
-        this.MaxAge = Math.floor(world.Settings.MaxAge * 0.80 + rando(world.Settings.MaxAge * 0.4));
+        this.MaxAge = Math.floor((world.Settings.MaxAge * 0.80) + rando(world.Settings.MaxAge * 0.4));
         if (this.Age >= this.MaxAge) {
             this.Age = this.MaxAge - 1;
             if (this.Age < 0)
@@ -206,25 +208,24 @@ var Animal = /** @class */ (function () {
         // could also have some strategy for moving even when it's not worth moving.
         // (if/when i have altitude -- the energy of moving will be based on altitude as well.)
         // energy taken to move depends on our current "mass" which is our stored energy.
-        var movingEnergy = (this.Energy / 40) + 3;
-        if (bestNeighbor.Energy > movingEnergy) {
-            currentTile.Animal = null;
-            bestNeighbor.Animal = this;
-            this.Col = bestNeighbor.Col;
-            this.Row = bestNeighbor.Row;
-            this.Energy -= movingEnergy;
-            //todo: standing still takes energy too.
-            if (this.Energy <= 0) {
-                this.Alive = false;
-                //console.log("Died of exhaustion.");
-                causeOfDeathNatural.push(false);
-                while (causeOfDeathNatural.length > deathsToTrack)
-                    causeOfDeathNatural.splice(0, 1);
-                return;
+        var movingEnergy = this.calcMovingEnergy();
+        var weMoved = false;
+        var standingStillEnergy = 3;
+        if (bestNeighbor == currentTile
+            || bestNeighbor.Energy > movingEnergy) {
+            if (bestNeighbor != currentTile) {
+                // gonna move!
+                weMoved = true;
+                this.moveTo(currentTile, bestNeighbor, movingEnergy);
+                currentTile = bestNeighbor;
             }
             else {
-                //console.log("Moved");
+                // didn't move, but standing still takes energy.
+                this.incEnergy(standingStillEnergy * -1);
             }
+            //woah, moving or standing still... it wiped us out!
+            if (!this.Alive)
+                return;
             //eat some energy...
             var munchAmount = this.Genes.MunchAmount;
             if (this.Energy + munchAmount > (this.Genes.MaxEnergy * world.Settings.EnergyUpscaleFactor)) {
@@ -234,7 +235,8 @@ var Animal = /** @class */ (function () {
             //and you can't eat more than the cell can give you!
             munchAmount = -1 * bestNeighbor.addEnergy(-1 * munchAmount);
             //console.log(`munch amount: ${munchAmount}`);
-            this.Energy += munchAmount;
+            //this.Energy += munchAmount;
+            this.incEnergy(munchAmount);
             if (this.Energy > (this.Genes.MaxEnergy * world.Settings.EnergyUpscaleFactor)) {
                 console.log("I have more energy than I thought possible! munched:" + munchAmount + " new_energy:" + this.Energy + " max:" + this.Genes.MaxEnergy);
             }
@@ -242,18 +244,108 @@ var Animal = /** @class */ (function () {
         else {
             //standing still...
             //how much does that cost?
-            var standingStillEnergy = 3;
-            this.Energy -= standingStillEnergy;
-            if (this.Energy <= 0) {
-                this.Alive = false;
-                causeOfDeathNatural.push(false);
-                while (causeOfDeathNatural.length > deathsToTrack)
-                    causeOfDeathNatural.splice(0, 1);
+            this.incEnergy(standingStillEnergy * -1);
+            if (!this.Alive)
                 return;
-            }
         }
+        var weFought = false;
+        if (!weMoved) {
+            //consider violence.
+            if (world.Settings.ConsiderViolence)
+                this.considerViolence(currentTile, neighbors);
+        }
+        if (!this.Alive)
+            return;
         neighbors = world.getNeighborCells(this.Col, this.Row);
         this.considerMating(neighbors);
+    };
+    Animal.prototype.moveTo = function (currentTile, bestNeighbor, movingEnergy) {
+        currentTile.Animal = null;
+        bestNeighbor.Animal = this;
+        this.Col = bestNeighbor.Col;
+        this.Row = bestNeighbor.Row;
+        this.incEnergy(movingEnergy * -1);
+    };
+    Animal.prototype.calcMovingEnergy = function () {
+        //The amount of energy it takes to move depends on how much energy we have, 
+        // which is considered analgous to our mass.
+        return (this.Energy / 40) + 3;
+    };
+    Animal.prototype.considerViolence = function (currentTile, cells) {
+        var movingEnergy = this.calcMovingEnergy();
+        var bestTile = currentTile;
+        var fightEnergy = this.Energy * (this.Genes.FightThreshold / 150);
+        for (var _i = 0, cells_1 = cells; _i < cells_1.length; _i++) {
+            var t = cells_1[_i];
+            if (t.Animal != null
+                && t.Energy > movingEnergy // worth moving to
+                && t.Energy > bestTile.Energy // best i've seen
+                && t.Animal.Energy < fightEnergy // wimp
+            ) {
+                bestTile = t;
+            }
+        }
+        if (bestTile != currentTile) {
+            var threatAmount = this.Energy * (this.Genes.ThreatEnergy / 200);
+            if (bestTile.Animal.threaten(threatAmount)) {
+                //they listened to the threat and they retreated (or perhaps there was nowhere to go).
+                //console.log("scared them");   
+                if (bestTile.Animal == null) {
+                    this.moveTo(currentTile, bestTile, movingEnergy);
+                }
+                return true;
+            }
+            else {
+                //console.log("HITTING");
+                this.hit(bestTile.Animal, threatAmount);
+                return false;
+            }
+        }
+        return false;
+    };
+    Animal.prototype.hit = function (targetAnimal, hitEnergy) {
+        //this.Energy -= ;
+        this.incEnergy(hitEnergy / -2);
+        targetAnimal.IGotHit += 5;
+        targetAnimal.incEnergy(hitEnergy * -2);
+    };
+    Animal.prototype.incEnergy = function (amount) {
+        this.Energy += amount;
+        if (this.Energy <= 0) {
+            this.Alive = false;
+            //console.log("Died of exhaustion.");
+            this.NaturalCauses = false;
+            causeOfDeathNatural.push(false);
+            while (causeOfDeathNatural.length > deathsToTrack)
+                causeOfDeathNatural.splice(0, 1);
+        }
+    };
+    Animal.prototype.threaten = function (threatAmount) {
+        //return true if the threat IS solid and respected.
+        //return false if we LAUGH in the face of this threat
+        //let threatWeCanStand = this.Energy / 2; //todo -- better function using our genes
+        var threatWeCanStand = this.Energy * (this.Genes.NotAfraid / 200);
+        if (threatAmount <= threatWeCanStand)
+            return false;
+        var currentTile = world.getCell(this.Col, this.Row);
+        var neighborCells = world.getNeighborCells(this.Col, this.Row);
+        var bestNeighbor = currentTile;
+        var noEscape = true;
+        for (var _i = 0, neighborCells_1 = neighborCells; _i < neighborCells_1.length; _i++) {
+            var t = neighborCells_1[_i];
+            if (t.Animal == null) {
+                noEscape = false;
+                if (t.Energy > bestNeighbor.Energy) {
+                    bestNeighbor = t;
+                }
+            }
+        }
+        if (noEscape)
+            return true;
+        if (bestNeighbor == currentTile)
+            return false;
+        this.moveTo(currentTile, bestNeighbor, this.calcMovingEnergy());
+        return true;
     };
     Animal.prototype.considerMating = function (cells) {
         if (this.Age < this.Genes.AgeOfMaturity)
@@ -269,8 +361,8 @@ var Animal = /** @class */ (function () {
         // whether or not they run into anyone... that's a different issue.
         var neighbors = [];
         var emptyCells = [];
-        for (var _i = 0, cells_1 = cells; _i < cells_1.length; _i++) {
-            var cell = cells_1[_i];
+        for (var _i = 0, cells_2 = cells; _i < cells_2.length; _i++) {
+            var cell = cells_2[_i];
             if (cell.Animal != null) {
                 // criteria to be a suitable mate:
                 if (cell.Animal.Alive // picky
@@ -316,6 +408,7 @@ var Animal = /** @class */ (function () {
         if (this.Age >= this.MaxAge) {
             this.Alive = false;
             //console.log("Died of old age.");
+            this.NaturalCauses = true;
             causeOfDeathNatural.push(true);
             while (causeOfDeathNatural.length > deathsToTrack)
                 causeOfDeathNatural.splice(0, 1);
@@ -327,10 +420,19 @@ var Animal = /** @class */ (function () {
     Animal.prototype.color = function () {
         if (!this.Alive) {
             //let fade = Math.max(0, 1 - (this.DeadDuration / this.MaxDeadDuration));
+            if (this.DeadDuration < 1.2) {
+                if (this.NaturalCauses)
+                    return "rgba(120,0,180,1)"; //purple
+                return "rgba(160,0,0,1)"; //red
+            }
             var fade = Math.max(0, 1 - (this.DeadDuration / world.Settings.MaxDeadDuration));
             var color = "rgba(20,20,20, " + fade + ")";
             //console.log(color);
             return color;
+        }
+        if (this.IGotHit > 0) {
+            this.IGotHit--;
+            return "rgba(0,0,255,1)"; //flash of bright blue
         }
         return "hsla(" + Math.floor(this.Genes.Hugh * 3.6) + ", " + Math.floor(this.Genes.Saturation) + "%, " + Math.floor(this.Genes.Lightness * 0.6) + "%, 0.9)";
         //return 'rgba(12,100,200, 0.9)';
@@ -422,7 +524,7 @@ function showStats() {
             var p = _k[_j];
             worldSettings += toWords(p) + ": ";
             if ((typeof settings[p]) == 'number') {
-                worldSettings += "<input type='button' class='set_the_controls' value='+' title='increase' onclick='inc(\"" + p + "\");' /> " + settings[p].toFixed(2) + " <input type='button' value='-' class='set_the_controls' title='decrease' onclick='dec(\"" + p + "\");' />";
+                worldSettings += "<input type='button' value='-' class='set_the_controls' title='decrease' onclick='dec(\"" + p + "\");' /> " + settings[p].toFixed(2) + " <input type='button' class='set_the_controls' value='+' title='increase' onclick='inc(\"" + p + "\");' />";
             }
             else {
                 //boolean
@@ -458,7 +560,12 @@ var worldSettingsChanged = true;
 function inc(p) {
     console.log(p);
     console.log(world.Settings);
-    world.Settings[p] = world.Settings[p] * 1.05;
+    if (world.Settings[p] == 0) {
+        world.Settings[p] += 20;
+    }
+    else {
+        world.Settings[p] = world.Settings[p] * 1.05;
+    }
     worldSettingsChanged = true;
     if (paused)
         showStats();
@@ -560,13 +667,16 @@ function CombineGene(gene1, gene2) {
 }
 var Genes = /** @class */ (function () {
     function Genes() {
-        this.MatingPercent = 3; // what percent of the time are you thinking about mating
-        this.MinMatingEnergy = 70; //if less than this much energy, don't consider mating
-        this.EnergyToChild = 20; // how much energy does a child start with
-        this.MunchAmount = 25; //how much energy will they try to extract from the ground each chance they get
-        this.AgeOfMaturity = 10; //how old do they have to be before they can mate
+        this.MatingPercent = 100; // what percent of the time are you thinking about mating
+        this.MinMatingEnergy = 30; //if less than this much energy, don't consider mating
+        this.EnergyToChild = 8; // how much energy does a child start with
+        this.MunchAmount = 100; //how much energy will they try to extract from the ground each chance they get
+        this.AgeOfMaturity = 1; //how old do they have to be before they can mate
         this.MinimumAcceptableEnergyInYourMate = 1; //a pulse will do
-        this.MaxEnergy = 50;
+        this.MaxEnergy = 100;
+        this.NotAfraid = 20; //if someone threatens us at this level or below we are not afraid
+        this.FightThreshold = 50; //we won't consider fighting someone unless this they are wimpier than this threshold
+        this.ThreatEnergy = 50; // this is the amunt of energy we'll put into a threat display (or first punch)
         this.Hugh = 50;
         this.Saturation = 50;
         this.Lightness = 100;
@@ -582,13 +692,14 @@ var Settings = /** @class */ (function () {
         this.InitialColumns = 80;
         this.InitialRows = 40;
         this.IsAlwaysSummer = false;
-        this.InitialSeasonLength = 20; // seasons are initially this length (unless 'is always summer' is true)
+        this.InitialSeasonLength = 1; // seasons are initially this length (unless 'is always summer' is true)
         this.DoSeasonsGetLonger = true;
         this.MaxSeasonLength = 220;
         this.MaxAge = 100; //How long do animals live
-        this.MaxDeadDuration = 10; //How long does it take for animals bodies to break down
+        this.MaxDeadDuration = 1; //How long does it take for animals bodies to break down
         // How much energy does grass receive on each tick?
         this.EnergyRate = 5.1;
+        this.ConsiderViolence = true;
         // How many 'years' go by for every tick. (age is specified in years, not ticks.)
         this.TickDuration = 0.1;
         // How much do we scale an animals genetic 'maxenergy' to find their true maximum energy.

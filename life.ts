@@ -100,7 +100,7 @@ class World {
     Settings:Settings = new Settings();
     ItIsSummer:boolean = true; //starts true, may or may not ever change, depending on settings.
     SeasonDay:number = 0; //today is the nth day of the current season.
-    SeasonLength: any;
+    SeasonLength: number;
     Tick:number = 0;
     WidthOfCell:number;
     HeightOfCell:number;
@@ -111,7 +111,7 @@ class World {
     Rows:number;
     Animals:Animal[];
     Trails:boolean = false;
-
+    
     tryAddAnimal():boolean {
         let col = rando(this.Columns);
         let row = rando(this.Rows);
@@ -195,8 +195,10 @@ function drawCell(world:World, cell:Cell) {
 }
 
 class Animal {
+    
     takeTurn(world: World) {
         if (!this.Alive) return;
+
         let currentTile = world.getCell(this.Col, this.Row);
         let neighbors = world.getNeighborCells(this.Col, this.Row);
         let bestNeighbor = currentTile;
@@ -211,24 +213,26 @@ class Animal {
         // (if/when i have altitude -- the energy of moving will be based on altitude as well.)
         
         // energy taken to move depends on our current "mass" which is our stored energy.
-        let movingEnergy = (this.Energy / 40) + 3;
-     
-        if (bestNeighbor.Energy > movingEnergy) {
-            currentTile.Animal = null;
-            bestNeighbor.Animal = this;
-            this.Col = bestNeighbor.Col;
-            this.Row = bestNeighbor.Row;
-            this.Energy -= movingEnergy;
-            //todo: standing still takes energy too.
-            if (this.Energy <= 0){
-                this.Alive = false;
-                //console.log("Died of exhaustion.");
-                causeOfDeathNatural.push(false);
-                while(causeOfDeathNatural.length > deathsToTrack) causeOfDeathNatural.splice(0,1);
-                return;
+        let movingEnergy = this.calcMovingEnergy();
+        let weMoved = false;
+        let standingStillEnergy = 3;
+
+        if (bestNeighbor == currentTile 
+            || bestNeighbor.Energy > movingEnergy) {
+
+            if (bestNeighbor != currentTile) {
+                // gonna move!
+                weMoved = true;
+                this.moveTo(currentTile, bestNeighbor, movingEnergy);
+                currentTile = bestNeighbor;
             } else {
-                //console.log("Moved");
+                // didn't move, but standing still takes energy.
+                this.incEnergy(standingStillEnergy * -1)
             }
+            
+            //woah, moving or standing still... it wiped us out!
+
+            if (!this.Alive) return;
 
             //eat some energy...
             let munchAmount = this.Genes.MunchAmount;
@@ -241,7 +245,8 @@ class Animal {
             munchAmount = -1 * bestNeighbor.addEnergy(-1 * munchAmount);
 
             //console.log(`munch amount: ${munchAmount}`);
-            this.Energy += munchAmount;
+            //this.Energy += munchAmount;
+            this.incEnergy(munchAmount);
 
             if (this.Energy > (this.Genes.MaxEnergy*world.Settings.EnergyUpscaleFactor)) {
                 console.log(`I have more energy than I thought possible! munched:${munchAmount} new_energy:${this.Energy} max:${this.Genes.MaxEnergy}`);
@@ -249,20 +254,121 @@ class Animal {
         } else {
             //standing still...
             //how much does that cost?
-            let standingStillEnergy = 3;
-            this.Energy -= standingStillEnergy;
-            if (this.Energy <= 0){
-                this.Alive = false;
-                causeOfDeathNatural.push(false);
-                while(causeOfDeathNatural.length > deathsToTrack) causeOfDeathNatural.splice(0,1);
-                return;
-            }
+            
+            this.incEnergy(standingStillEnergy * -1)
+
+            if (!this.Alive) return;
         }
+        let weFought = false;
+
+        
+        if (!weMoved) {
+            //consider violence.
+            if (world.Settings.ConsiderViolence) this.considerViolence(currentTile, neighbors);
+        }
+        
+        if (!this.Alive) return;
 
         neighbors = world.getNeighborCells(this.Col, this.Row);
+
         this.considerMating(neighbors);
     }
 
+    moveTo(currentTile:Cell, bestNeighbor:Cell, movingEnergy:number) {
+        currentTile.Animal = null;
+        bestNeighbor.Animal = this;
+        this.Col = bestNeighbor.Col;
+        this.Row = bestNeighbor.Row;
+        this.incEnergy(movingEnergy * -1);
+    }
+
+    calcMovingEnergy() {
+        //The amount of energy it takes to move depends on how much energy we have, 
+        // which is considered analgous to our mass.
+        return (this.Energy / 40) + 3;
+    }
+    
+    considerViolence(currentTile:Cell, cells:Cell[]):boolean {
+        let movingEnergy = this.calcMovingEnergy();
+        let bestTile = currentTile;
+        let fightEnergy =  this.Energy * (this.Genes.FightThreshold / 150);
+        for(const t of cells){
+            if (t.Animal != null 
+                && t.Energy > movingEnergy // worth moving to
+                && t.Energy > bestTile.Energy // best i've seen
+                && t.Animal.Energy < fightEnergy  // wimp
+                ) {
+                bestTile = t;
+            }
+        }
+        
+        if (bestTile != currentTile){
+            
+            let threatAmount = this.Energy * (this.Genes.ThreatEnergy / 200);
+            if (bestTile.Animal.threaten(threatAmount)) {
+                //they listened to the threat and they retreated (or perhaps there was nowhere to go).
+                //console.log("scared them");   
+                if (bestTile.Animal == null) {
+                    this.moveTo(currentTile, bestTile, movingEnergy);
+                }
+                return true;
+            } else {
+                //console.log("HITTING");
+                this.hit(bestTile.Animal, threatAmount);
+                return false;
+            }
+        }
+
+        return false;
+    }
+    
+    hit(targetAnimal:Animal, hitEnergy:number){
+        //this.Energy -= ;
+        this.incEnergy(hitEnergy/-2)
+        targetAnimal.IGotHit += 5;
+        targetAnimal.incEnergy(hitEnergy * -2);
+    }
+    
+    incEnergy(amount:number) {
+        this.Energy += amount;
+        if (this.Energy <= 0){
+            this.Alive = false;
+            //console.log("Died of exhaustion.");
+            this.NaturalCauses = false;
+            causeOfDeathNatural.push(false);
+            while(causeOfDeathNatural.length > deathsToTrack) causeOfDeathNatural.splice(0,1);
+        } 
+    }
+
+    threaten(threatAmount:number):boolean{
+        //return true if the threat IS solid and respected.
+        //return false if we LAUGH in the face of this threat
+        //let threatWeCanStand = this.Energy / 2; //todo -- better function using our genes
+        let threatWeCanStand = this.Energy * (this.Genes.NotAfraid / 200); 
+        if (threatAmount <= threatWeCanStand) return false;
+        
+        let currentTile = world.getCell(this.Col, this.Row);
+        let neighborCells = world.getNeighborCells(this.Col, this.Row);
+        let bestNeighbor = currentTile;
+        let noEscape = true;
+        for(var t of neighborCells) {
+            
+            if (t.Animal == null){
+                noEscape = false;
+                if (t.Energy > bestNeighbor.Energy) {
+                    bestNeighbor = t;
+                } 
+            }
+        }
+
+        if (noEscape) return true;
+        if (bestNeighbor == currentTile) return false;
+
+        this.moveTo(currentTile, bestNeighbor, this.calcMovingEnergy());
+
+        return true;
+    }
+    
     considerMating(cells:Cell[]) {
         if (this.Age < this.Genes.AgeOfMaturity) return;        
         if (this.Energy < this.Genes.MinMatingEnergy) return;
@@ -323,6 +429,7 @@ class Animal {
         if (this.Age >= this.MaxAge) {
             this.Alive = false;
             //console.log("Died of old age.");
+            this.NaturalCauses = true;
             causeOfDeathNatural.push(true);
             while(causeOfDeathNatural.length > deathsToTrack) causeOfDeathNatural.splice(0,1);
         }
@@ -339,7 +446,7 @@ class Animal {
         this.Energy = initialEnergy; 
         this.Id = newId();
         this.Genes = getDefaultGenes();
-        this.MaxAge = Math.floor(world.Settings.MaxAge * 0.80 + rando(world.Settings.MaxAge * 0.4));
+        this.MaxAge = Math.floor((world.Settings.MaxAge * 0.80) + rando(world.Settings.MaxAge * 0.4));
         if (this.Age >= this.MaxAge) {
             this.Age = this.MaxAge - 1;
             if (this.Age < 0) this.Age = 0;
@@ -348,10 +455,19 @@ class Animal {
     color():string {
         if (!this.Alive) {
             //let fade = Math.max(0, 1 - (this.DeadDuration / this.MaxDeadDuration));
+            if (this.DeadDuration < 1.2) {
+                if (this.NaturalCauses) return `rgba(120,0,180,1)`; //purple
+                return `rgba(160,0,0,1)`; //red
+            }
+
             let fade = Math.max(0, 1 - (this.DeadDuration / world.Settings.MaxDeadDuration));
             let color = `rgba(20,20,20, ${fade})`;
             //console.log(color);
             return color;
+        }
+        if (this.IGotHit > 0){
+            this.IGotHit--;
+            return `rgba(0,0,255,1)`; //flash of bright blue
         }
         return `hsla(${Math.floor(this.Genes.Hugh*3.6)}, ${Math.floor(this.Genes.Saturation)}%, ${Math.floor(this.Genes.Lightness*0.6)}%, 0.9)`;
         //return 'rgba(12,100,200, 0.9)';
@@ -363,7 +479,9 @@ class Animal {
     Age:number; //when age = maxage... they die.
     MaxAge:number; //will be based on world.MaxAge but not exactly...
     Alive:boolean = true;
+    NaturalCauses:boolean = null; // did we die from natural causes or other?
     DeadDuration:number = 0; //if dead... how long have they been dead?
+    IGotHit:number = 0;
     Energy:number = 100;
     Id:number;
     Genes:Genes;
@@ -455,7 +573,7 @@ function showStats() {
         for(var p of Object.getOwnPropertyNames(settings)) {
             worldSettings+=`${toWords(p)}: `;
             if ((typeof settings[p]) == 'number'){
-                worldSettings+=`<input type='button' class='set_the_controls' value='+' title='increase' onclick='inc("${p}");' /> ${settings[p].toFixed(2)} <input type='button' value='-' class='set_the_controls' title='decrease' onclick='dec("${p}");' />`;
+                worldSettings+=`<input type='button' value='-' class='set_the_controls' title='decrease' onclick='dec("${p}");' /> ${settings[p].toFixed(2)} <input type='button' class='set_the_controls' value='+' title='increase' onclick='inc("${p}");' />`;
             } else {
                 //boolean
                 worldSettings+=`${settings[p]} <input type='button' value='/' class='set_the_controls' title='toggle' onclick='toggle("${p}");' />`;
@@ -503,7 +621,11 @@ let worldSettingsChanged:boolean = true;
 function inc(p:string) {
     console.log(p);
     console.log(world.Settings);
-    world.Settings[p] = world.Settings[p] * 1.05;
+    if (world.Settings[p] == 0) {
+        world.Settings[p] += 20;
+    } else {
+        world.Settings[p] = world.Settings[p] * 1.05;
+    }
     worldSettingsChanged = true;
     if (paused) showStats();
 }
@@ -609,13 +731,16 @@ function CombineGene(gene1:number, gene2:number):number {
 }
 
 class Genes {
-    MatingPercent:number = 3; // what percent of the time are you thinking about mating
-    MinMatingEnergy:number =70; //if less than this much energy, don't consider mating
-    EnergyToChild:number =20; // how much energy does a child start with
-    MunchAmount:number =25; //how much energy will they try to extract from the ground each chance they get
-    AgeOfMaturity:number =10; //how old do they have to be before they can mate
+    MatingPercent:number = 100; // what percent of the time are you thinking about mating
+    MinMatingEnergy:number = 30; //if less than this much energy, don't consider mating
+    EnergyToChild:number = 8; // how much energy does a child start with
+    MunchAmount:number = 100; //how much energy will they try to extract from the ground each chance they get
+    AgeOfMaturity:number =1; //how old do they have to be before they can mate
     MinimumAcceptableEnergyInYourMate:number =1; //a pulse will do
-    MaxEnergy:number =50;
+    MaxEnergy:number =100;
+    NotAfraid:number = 20; //if someone threatens us at this level or below we are not afraid
+    FightThreshold:number = 50; //we won't consider fighting someone unless this they are wimpier than this threshold
+    ThreatEnergy:number = 50; // this is the amunt of energy we'll put into a threat display (or first punch)
     Hugh:number =50;
     Saturation:number =50;
     Lightness:number =100;
@@ -631,15 +756,15 @@ class Settings {
     InitialColumns:number = 80;
     InitialRows:number = 40;
     IsAlwaysSummer:boolean = false;
-    InitialSeasonLength:number = 20; // seasons are initially this length (unless 'is always summer' is true)
+    InitialSeasonLength:number = 1; // seasons are initially this length (unless 'is always summer' is true)
     DoSeasonsGetLonger:boolean = true;
     MaxSeasonLength:number = 220;
 
     MaxAge:number = 100; //How long do animals live
-    MaxDeadDuration:number = 10; //How long does it take for animals bodies to break down
+    MaxDeadDuration:number = 1; //How long does it take for animals bodies to break down
     // How much energy does grass receive on each tick?
     EnergyRate:number = 5.1; 
-
+    ConsiderViolence:boolean = true;
     // How many 'years' go by for every tick. (age is specified in years, not ticks.)
     TickDuration:number = 0.1; 
 
