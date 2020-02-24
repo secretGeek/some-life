@@ -1,5 +1,5 @@
-var canvas;
-var ctx;
+var canvas:HTMLCanvasElement;
+var ctx:CanvasRenderingContext2D;
 var world:World;
 var causeOfDeathNatural:boolean[] = [];
 
@@ -9,10 +9,9 @@ var deathsToTrack:number = 100; //number of recent deaths to keep track of for s
 const babySize = 0.3 
 
 //Feature to consider:
+// walls
 //predation
-//resource strategy...
-// if someone else is on fertile land -- do you hit them...
-// (and if so -- can they move away/respond as part of this turn?)
+// has a level ... and the chances of 
 
 function draw2() {
     if (!world.Trails) ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -66,7 +65,39 @@ function draw2() {
     }
 }
 
+class Wall {
+    constructor(
+        height:number,
+    ) {
+        this.Height = height;
+        
+    }
+    Height: number;
+}
 class World {
+    InjectWall(col: number, row: number) {
+        var c = this.getCell(col, row);
+        if (c.Animal) {
+            if (c.Animal.Alive) {
+                c.Animal.Alive = false;
+                c.Animal.NaturalCauses = false;
+                //Hardly natural causes when you get a wall dropped on your head is it.
+            }
+        }
+        c.Wall = new Wall(10);
+
+        throw new Error("Method not implemented.");
+    }
+    getCellAtXY(x: number, y: number):Cell {
+        let column = Math.floor(x / this.WidthOfCell);
+        let row = Math.floor(y/this.HeightOfCell);
+        //alert("col: " + column + " row: " + row);
+        var c = this.getCell(column, row);
+        //
+        return c;
+        //if (c.Animal == null) alert('No animal        ')
+        //throw new Error("Method not implemented.");
+    }
     constructor(
         canvasWidth:number,
         canvasHeight:number,
@@ -88,8 +119,13 @@ class World {
         }
         console.log("For squarer cells, keep #rows and set cols to: " + ((this.CanvasWidth / this.CanvasHeight) * this.Rows) );
         console.log("...or keep # cols and set rows to: " + ((this.CanvasHeight/this.CanvasWidth) * this.Columns));
-        this.Animals = [];
         this.SeasonLength = Math.floor(this.Settings.InitialSeasonLength);    
+        if (this.Settings.InitialPopulationSize > this.Columns * this.Rows){
+            console.log("Too many animals to fit into a world of this size. Reducing initial pop size");
+            this.Settings.InitialPopulationSize = (this.Columns * this.Rows ) ;
+        }
+
+        this.Animals = [];
         while (this.Animals.length < this.Settings.InitialPopulationSize) {
             this.tryAddAnimal();
         }
@@ -169,12 +205,16 @@ class Cell {
         this.Energy = rando(100);
     }
     color():string {
+        if (this.Wall) {
+            return `rgb(210,200,200)`;    
+        }
         return `hsla(120, 69%, ${Math.floor((this.Energy*0.4)+5)}%, 0.9)`;
     }
     Col:number;
     Row:number;
     Energy:number;
     Animal:Animal;
+    Wall: Wall;
     addEnergy(amount:number):number {
         let initialEnergy = this.Energy;
         //cannot be less than zero, cannot be greater than 100.
@@ -203,7 +243,7 @@ class Animal {
         let neighbors = world.getNeighborCells(this.Col, this.Row);
         let bestNeighbor = currentTile;
         for(var t of neighbors){
-            if (t.Animal == null && t.Energy > bestNeighbor.Energy){
+            if (!t.Animal && !t.Wall && t.Energy > bestNeighbor.Energy){
                 bestNeighbor = t;
             } 
         }
@@ -271,7 +311,9 @@ class Animal {
 
         neighbors = world.getNeighborCells(this.Col, this.Row);
 
-        this.considerMating(neighbors);
+        if (this.Age >= this.Genes.AgeOfMaturity) {
+            this.considerMating(neighbors);
+        }
     }
 
     moveTo(currentTile:Cell, bestNeighbor:Cell, movingEnergy:number) {
@@ -291,9 +333,9 @@ class Animal {
     considerViolence(currentTile:Cell, cells:Cell[]):boolean {
         let movingEnergy = this.calcMovingEnergy();
         let bestTile = currentTile;
-        let fightEnergy =  this.Energy * (this.Genes.FightThreshold / 150);
+        let fightEnergy =  this.Energy * (this.Genes.Punchy / 150);
         for(const t of cells){
-            if (t.Animal != null 
+            if (t.Animal && !t.Wall  // empty
                 && t.Energy > movingEnergy // worth moving to
                 && t.Energy > bestTile.Energy // best i've seen
                 && t.Animal.Energy < fightEnergy  // wimp
@@ -353,7 +395,7 @@ class Animal {
         let noEscape = true;
         for(var t of neighborCells) {
             
-            if (t.Animal == null){
+            if (!t.Animal && !t.Wall){
                 noEscape = false;
                 if (t.Energy > bestNeighbor.Energy) {
                     bestNeighbor = t;
@@ -382,7 +424,7 @@ class Animal {
         let neighbors:Animal[] = [];
         let emptyCells:Cell[] = [];
         for(let cell of cells){
-            if (cell.Animal != null) {
+            if (cell.Animal) {
                 // criteria to be a suitable mate:
                 if (cell.Animal.Alive  // picky
                     && cell.Animal.Id != this.Id // avoid blindness
@@ -391,7 +433,9 @@ class Animal {
                     neighbors.push(cell.Animal);
                 }
             } else {
-                emptyCells.push(cell);
+                if (!cell.Wall) {
+                    emptyCells.push(cell);
+                }
             }
         }
 
@@ -405,14 +449,26 @@ class Animal {
         //TODO: rank the suitors by most energy.
         //TODO: have other strategies for ranking suitors
         //TODO: suitors have their energy, but also: how much energy they advertise.
-        
+
+        //choose the best cell to place the child on.
+        let bestCell = emptyCells[0];
+        for(let cell of emptyCells) {
+            if (cell.Energy > bestCell.Energy) {
+                bestCell = cell;
+            }
+        }
+
+        //TODO:  acceptable energy in a nest.
+        //if (bestCell.Energy < 3) return;
+
         let potentialMate = neighbors[0];
-        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.Genes.EnergyToChild);
-        let child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
+
+        world.addAnimal(bestCell.Col, bestCell.Row, 0, this.Genes.EnergyToChild);
+        let child = world.getCell(bestCell.Col, bestCell.Row).Animal;
         child.Generation = (this.Generation + potentialMate.Generation)/2 + 1;
         child.Genes = Crossover(this.Genes, potentialMate.Genes);
         //child.Energy = this.EnergyToChild;
-        this.Energy -= this.Genes.EnergyToChild;
+        this.incEnergy(this.Genes.EnergyToChild * -1);
     }
     AdvertisedEnergy() {
         //todo: consider displaying a different amount of energy.
@@ -424,7 +480,7 @@ class Animal {
         this.Age = Math.min(this.MaxAge, this.Age+tickDuration);
         
         //babySize is a fraction, e.g. 0.3, so that babies are not a tiny spec, but start at 30% of final size.
-        this.Size = babySize + ((1.0 - babySize)*(this.Age / world.Settings.MaxAge)); //from 0..1.0
+        this.Size = babySize + ((1.0 - babySize)*(this.Age / this.MaxAge)); //from 0..1.0
         //if (this.Age >= this.MaxAge) {
         if (this.Age >= this.MaxAge) {
             this.Alive = false;
@@ -447,6 +503,7 @@ class Animal {
         this.Id = newId();
         this.Genes = getDefaultGenes();
         this.MaxAge = Math.floor((world.Settings.MaxAge * 0.80) + rando(world.Settings.MaxAge * 0.4));
+        console.log("MAX AGE: " + this.MaxAge);
         if (this.Age >= this.MaxAge) {
             this.Age = this.MaxAge - 1;
             if (this.Age < 0) this.Age = 0;
@@ -739,7 +796,7 @@ class Genes {
     MinimumAcceptableEnergyInYourMate:number =1; //a pulse will do
     MaxEnergy:number =100;
     NotAfraid:number = 20; //if someone threatens us at this level or below we are not afraid
-    FightThreshold:number = 50; //we won't consider fighting someone unless this they are wimpier than this threshold
+    Punchy:number = 50; //we will consider punching anyone with less energy than this threshold
     ThreatEnergy:number = 50; // this is the amunt of energy we'll put into a threat display (or first punch)
     Hugh:number =50;
     Saturation:number =50;
@@ -845,7 +902,7 @@ document.addEventListener("DOMContentLoaded", function () {
         readGeneForm('geneForm');
         removeClass('.startHidden', 'startHidden');
         
-        canvas = document.getElementById("html-canvas");
+        canvas = <HTMLCanvasElement>document.getElementById("html-canvas");
         canvas.width = canvas.clientWidth;
         canvas.height = canvas.clientHeight;
         
@@ -859,9 +916,25 @@ document.addEventListener("DOMContentLoaded", function () {
         $id('worldForm').classList.add('hidden');
         $id('go').classList.add('hidden');
 
-        /*canvas.addEventListener('click', function() { 
-            world.getNeighborCells(5,5);
-        }, false);*/
+        canvas.addEventListener('mousedown', function(e) { 
+            getCursorPosition(canvas, e);
+        }, false);
         draw2();
     });
 }, false);
+
+
+function getCursorPosition(canvas:HTMLCanvasElement, event) {
+    const rect = canvas.getBoundingClientRect();
+    const x = event.clientX - rect.left;
+    const y = event.clientY - rect.top;
+    var c = world.getCellAtXY(x,y);
+    //alert(JSON.stringify(c));
+    if (!c.Wall) {
+        world.InjectWall(c.Col, c.Row);
+    } else {
+        c.Wall = null;
+    }
+    //alert("x: " + x + " y: " + y);
+    
+}

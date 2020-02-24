@@ -6,10 +6,9 @@ var deathsToTrack = 100; //number of recent deaths to keep track of for stats re
 // what is the display size of a baby (relative to an adult) (e.g. 10% of adult size, then 0.1)
 var babySize = 0.3;
 //Feature to consider:
+// walls
 //predation
-//resource strategy...
-// if someone else is on fertile land -- do you hit them...
-// (and if so -- can they move away/respond as part of this turn?)
+// has a level ... and the chances of 
 function draw2() {
     if (!world.Trails)
         ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -64,6 +63,12 @@ function draw2() {
         }
     }
 }
+var Wall = /** @class */ (function () {
+    function Wall(height) {
+        this.Height = height;
+    }
+    return Wall;
+}());
 var World = /** @class */ (function () {
     function World(canvasWidth, canvasHeight) {
         this.Pop = -1;
@@ -75,6 +80,28 @@ var World = /** @class */ (function () {
         this.CanvasWidth = canvasWidth;
         this.CanvasHeight = canvasHeight;
     }
+    World.prototype.InjectWall = function (col, row) {
+        var c = this.getCell(col, row);
+        if (c.Animal) {
+            if (c.Animal.Alive) {
+                c.Animal.Alive = false;
+                c.Animal.NaturalCauses = false;
+                //Hardly natural causes when you get a wall dropped on your head is it.
+            }
+        }
+        c.Wall = new Wall(10);
+        throw new Error("Method not implemented.");
+    };
+    World.prototype.getCellAtXY = function (x, y) {
+        var column = Math.floor(x / this.WidthOfCell);
+        var row = Math.floor(y / this.HeightOfCell);
+        //alert("col: " + column + " row: " + row);
+        var c = this.getCell(column, row);
+        //
+        return c;
+        //if (c.Animal == null) alert('No animal        ')
+        //throw new Error("Method not implemented.");
+    };
     World.prototype.initialize = function () {
         this.Cells = [];
         this.Columns = Math.floor(this.Settings.InitialColumns);
@@ -89,8 +116,12 @@ var World = /** @class */ (function () {
         }
         console.log("For squarer cells, keep #rows and set cols to: " + ((this.CanvasWidth / this.CanvasHeight) * this.Rows));
         console.log("...or keep # cols and set rows to: " + ((this.CanvasHeight / this.CanvasWidth) * this.Columns));
-        this.Animals = [];
         this.SeasonLength = Math.floor(this.Settings.InitialSeasonLength);
+        if (this.Settings.InitialPopulationSize > this.Columns * this.Rows) {
+            console.log("Too many animals to fit into a world of this size. Reducing initial pop size");
+            this.Settings.InitialPopulationSize = (this.Columns * this.Rows);
+        }
+        this.Animals = [];
         while (this.Animals.length < this.Settings.InitialPopulationSize) {
             this.tryAddAnimal();
         }
@@ -154,6 +185,9 @@ var Cell = /** @class */ (function () {
         this.Energy = rando(100);
     }
     Cell.prototype.color = function () {
+        if (this.Wall) {
+            return "rgb(210,200,200)";
+        }
         return "hsla(120, 69%, " + Math.floor((this.Energy * 0.4) + 5) + "%, 0.9)";
     };
     Cell.prototype.addEnergy = function (amount) {
@@ -186,6 +220,7 @@ var Animal = /** @class */ (function () {
         this.Id = newId();
         this.Genes = getDefaultGenes();
         this.MaxAge = Math.floor((world.Settings.MaxAge * 0.80) + rando(world.Settings.MaxAge * 0.4));
+        console.log("MAX AGE: " + this.MaxAge);
         if (this.Age >= this.MaxAge) {
             this.Age = this.MaxAge - 1;
             if (this.Age < 0)
@@ -200,7 +235,7 @@ var Animal = /** @class */ (function () {
         var bestNeighbor = currentTile;
         for (var _i = 0, neighbors_1 = neighbors; _i < neighbors_1.length; _i++) {
             var t = neighbors_1[_i];
-            if (t.Animal == null && t.Energy > bestNeighbor.Energy) {
+            if (!t.Animal && !t.Wall && t.Energy > bestNeighbor.Energy) {
                 bestNeighbor = t;
             }
         }
@@ -257,7 +292,9 @@ var Animal = /** @class */ (function () {
         if (!this.Alive)
             return;
         neighbors = world.getNeighborCells(this.Col, this.Row);
-        this.considerMating(neighbors);
+        if (this.Age >= this.Genes.AgeOfMaturity) {
+            this.considerMating(neighbors);
+        }
     };
     Animal.prototype.moveTo = function (currentTile, bestNeighbor, movingEnergy) {
         currentTile.Animal = null;
@@ -274,10 +311,10 @@ var Animal = /** @class */ (function () {
     Animal.prototype.considerViolence = function (currentTile, cells) {
         var movingEnergy = this.calcMovingEnergy();
         var bestTile = currentTile;
-        var fightEnergy = this.Energy * (this.Genes.FightThreshold / 150);
+        var fightEnergy = this.Energy * (this.Genes.Punchy / 150);
         for (var _i = 0, cells_1 = cells; _i < cells_1.length; _i++) {
             var t = cells_1[_i];
-            if (t.Animal != null
+            if (t.Animal && !t.Wall // empty
                 && t.Energy > movingEnergy // worth moving to
                 && t.Energy > bestTile.Energy // best i've seen
                 && t.Animal.Energy < fightEnergy // wimp
@@ -333,7 +370,7 @@ var Animal = /** @class */ (function () {
         var noEscape = true;
         for (var _i = 0, neighborCells_1 = neighborCells; _i < neighborCells_1.length; _i++) {
             var t = neighborCells_1[_i];
-            if (t.Animal == null) {
+            if (!t.Animal && !t.Wall) {
                 noEscape = false;
                 if (t.Energy > bestNeighbor.Energy) {
                     bestNeighbor = t;
@@ -363,7 +400,7 @@ var Animal = /** @class */ (function () {
         var emptyCells = [];
         for (var _i = 0, cells_2 = cells; _i < cells_2.length; _i++) {
             var cell = cells_2[_i];
-            if (cell.Animal != null) {
+            if (cell.Animal) {
                 // criteria to be a suitable mate:
                 if (cell.Animal.Alive // picky
                     && cell.Animal.Id != this.Id // avoid blindness
@@ -373,7 +410,9 @@ var Animal = /** @class */ (function () {
                 }
             }
             else {
-                emptyCells.push(cell);
+                if (!cell.Wall) {
+                    emptyCells.push(cell);
+                }
             }
         }
         //slim pickins.
@@ -387,13 +426,23 @@ var Animal = /** @class */ (function () {
         //TODO: rank the suitors by most energy.
         //TODO: have other strategies for ranking suitors
         //TODO: suitors have their energy, but also: how much energy they advertise.
+        //choose the best cell to place the child on.
+        var bestCell = emptyCells[0];
+        for (var _a = 0, emptyCells_1 = emptyCells; _a < emptyCells_1.length; _a++) {
+            var cell = emptyCells_1[_a];
+            if (cell.Energy > bestCell.Energy) {
+                bestCell = cell;
+            }
+        }
+        //TODO:  acceptable energy in a nest.
+        //if (bestCell.Energy < 3) return;
         var potentialMate = neighbors[0];
-        world.addAnimal(emptyCells[0].Col, emptyCells[0].Row, 0, this.Genes.EnergyToChild);
-        var child = world.getCell(emptyCells[0].Col, emptyCells[0].Row).Animal;
+        world.addAnimal(bestCell.Col, bestCell.Row, 0, this.Genes.EnergyToChild);
+        var child = world.getCell(bestCell.Col, bestCell.Row).Animal;
         child.Generation = (this.Generation + potentialMate.Generation) / 2 + 1;
         child.Genes = Crossover(this.Genes, potentialMate.Genes);
         //child.Energy = this.EnergyToChild;
-        this.Energy -= this.Genes.EnergyToChild;
+        this.incEnergy(this.Genes.EnergyToChild * -1);
     };
     Animal.prototype.AdvertisedEnergy = function () {
         //todo: consider displaying a different amount of energy.
@@ -403,7 +452,7 @@ var Animal = /** @class */ (function () {
     Animal.prototype.addAge = function (tickDuration) {
         this.Age = Math.min(this.MaxAge, this.Age + tickDuration);
         //babySize is a fraction, e.g. 0.3, so that babies are not a tiny spec, but start at 30% of final size.
-        this.Size = babySize + ((1.0 - babySize) * (this.Age / world.Settings.MaxAge)); //from 0..1.0
+        this.Size = babySize + ((1.0 - babySize) * (this.Age / this.MaxAge)); //from 0..1.0
         //if (this.Age >= this.MaxAge) {
         if (this.Age >= this.MaxAge) {
             this.Alive = false;
@@ -675,7 +724,7 @@ var Genes = /** @class */ (function () {
         this.MinimumAcceptableEnergyInYourMate = 1; //a pulse will do
         this.MaxEnergy = 100;
         this.NotAfraid = 20; //if someone threatens us at this level or below we are not afraid
-        this.FightThreshold = 50; //we won't consider fighting someone unless this they are wimpier than this threshold
+        this.Punchy = 50; //we will consider punching anyone with less energy than this threshold
         this.ThreatEnergy = 50; // this is the amunt of energy we'll put into a threat display (or first punch)
         this.Hugh = 50;
         this.Saturation = 50;
@@ -780,9 +829,23 @@ document.addEventListener("DOMContentLoaded", function () {
         $id('geneForm').classList.add('hidden');
         $id('worldForm').classList.add('hidden');
         $id('go').classList.add('hidden');
-        /*canvas.addEventListener('click', function() {
-            world.getNeighborCells(5,5);
-        }, false);*/
+        canvas.addEventListener('mousedown', function (e) {
+            getCursorPosition(canvas, e);
+        }, false);
         draw2();
     });
 }, false);
+function getCursorPosition(canvas, event) {
+    var rect = canvas.getBoundingClientRect();
+    var x = event.clientX - rect.left;
+    var y = event.clientY - rect.top;
+    var c = world.getCellAtXY(x, y);
+    //alert(JSON.stringify(c));
+    if (!c.Wall) {
+        world.InjectWall(c.Col, c.Row);
+    }
+    else {
+        c.Wall = null;
+    }
+    //alert("x: " + x + " y: " + y);
+}
