@@ -85,8 +85,6 @@ class World {
             }
         }
         c.Wall = new Wall(10);
-
-        throw new Error("Method not implemented.");
     }
     getCellAtXY(x: number, y: number):Cell {
         let column = Math.floor(x / this.WidthOfCell);
@@ -119,6 +117,22 @@ class World {
         }
         console.log("For squarer cells, keep #rows and set cols to: " + ((this.CanvasWidth / this.CanvasHeight) * this.Rows) );
         console.log("...or keep # cols and set rows to: " + ((this.CanvasHeight/this.CanvasWidth) * this.Columns));
+
+        if (this.Settings.DrawBoxWalls) {
+            //Draw a grid!
+            for(let x = 0; x < this.Columns / this.Settings.BoxWallSize; x ++ ){
+                for(let y = 0; y < this.Rows; y++) {
+                    this.InjectWall(x*this.Settings.BoxWallSize,y);
+                }
+            }
+
+            for(let y = 0; y < this.Rows / this.Settings.BoxWallSize; y++) {
+                for(let x = 0; x < this.Columns; x ++ ){
+                    this.InjectWall(x,y*this.Settings.BoxWallSize);
+                }
+            }
+        }
+
         this.SeasonLength = Math.floor(this.Settings.InitialSeasonLength);    
         if (this.Settings.InitialPopulationSize > this.Columns * this.Rows){
             console.log("Too many animals to fit into a world of this size. Reducing initial pop size");
@@ -832,7 +846,9 @@ class Settings {
     Mutate1:number = 100;
     Mutate2:number = 100;
     MutateDivisor:number = 20;
-
+    AllowWalls:boolean = true;
+    DrawBoxWalls:boolean = true;
+    BoxWallSize:number = 8;
     // How many milliseconds to wait between rendering each frame
     Delay:number=0;
 }
@@ -891,6 +907,9 @@ function readWorldForm(id:string){
     console.log(JSON.stringify(settings));
 }
 
+var mouseDown:boolean = false;
+
+
 document.addEventListener("DOMContentLoaded", function () {
     populateGeneForm('geneForm');
     populateWorldForm('worldForm');
@@ -917,24 +936,40 @@ document.addEventListener("DOMContentLoaded", function () {
         $id('go').classList.add('hidden');
 
         canvas.addEventListener('mousedown', function(e) { 
-            getCursorPosition(canvas, e);
+            mouseDown = true;
+            placeWall(canvas, e, true);
         }, false);
+
+        canvas.addEventListener('mouseup', function(e) { 
+            mouseDown = false;
+            //getCursorPosition(canvas, e);
+        }, false);
+
+
+        canvas.addEventListener('mousemove', function(e) { 
+            if (mouseDown){
+                placeWall(canvas, e, false);
+            }
+        }, false);
+
         draw2();
     });
 }, false);
 
 
-function getCursorPosition(canvas:HTMLCanvasElement, event) {
+
+function placeWall(canvas:HTMLCanvasElement, event, toggler:boolean) {
     const rect = canvas.getBoundingClientRect();
     const x = event.clientX - rect.left;
     const y = event.clientY - rect.top;
     var c = world.getCellAtXY(x,y);
-    //alert(JSON.stringify(c));
-    if (!c.Wall) {
-        world.InjectWall(c.Col, c.Row);
-    } else {
-        c.Wall = null;
+    console.log(x,y,c);
+    if (world.Settings.AllowWalls) {
+        if (!c.Wall) {
+            world.InjectWall(c.Col, c.Row);
+        } else {
+            if (toggler) c.Wall = null;
+            //
+        }
     }
-    //alert("x: " + x + " y: " + y);
-    
 }
