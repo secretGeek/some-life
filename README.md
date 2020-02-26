@@ -319,4 +319,33 @@ Saturation is free to drift, like hugh, and is used for the rendering of the ani
 Lightness is free to drift, like hugh and saturation, and is used for the rendering of the animal.
 
 
-[play the game now, live](https://secretgeek.github.io/some-life/)
+
+
+## Notes
+
+
+### Colors
+
+When an animal dies of old age it flashes purple for a while (governed by 'MaxDeadDuration/TickDuration`) until it fades away.
+
+If an animal dies from starvation or violence, it turns bright red instead of purple, before fading away.
+
+If an animal is assaulted (due to violence) it flashes bright blue for 5 ticks.
+
+
+## Genes and crossover
+
+Each animal has only one copy of its genes, thus they are "haploid".
+
+(This is different to humans for example, who generally have two copies of each DNA sequence, in what is called "diploid" formation, common to most eukaryotes.)
+
+A haploid configuration seems to be adequate for most genetic algorithms and simulations that are not specifically aimed at modelling higher levels of ploidy. It takes away the need to include "dominance" in every gene, and generally simplifies things.
+
+In this game each gene is equally likely to come from either parent. This is also different to life on earth, where adjacant DNA is likely to come from the same parent, up until a "crossover" event at which point DNA sequences will then be from the other parent. (It is currenty estimated that there are between 1 and 2 crossover events per chromosome, in humans). Crossover is often used in simulated life, and could be useful here, particularly where behavior is encoded in more than one gene. If we would like some adjacent genes to "travel together" across generations, then cross over would be better than just randomly picking a gene from either parent.
+
+
+
+
+
+## [play the game now, live](https://secretgeek.github.io/some-life/)
+
