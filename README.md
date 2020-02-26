@@ -2,12 +2,14 @@
 
 [**TRY THE LIVE DEMO**](https://secretgeek.github.io/some-life/)
 
+[![screenshot showing a single open field with a lot of colored dots](screenshot0.png)](https://secretgeek.github.io/some-life/)
 
-This is a simulation that has evolving digital life forms. 
+
+This is a simulation of evolving life.
 
 (*Tech note:* it is written in vanilla typescript and compiled to javascript. The graphics are displayed using a html canvas)
 
-Here is the general idea, and then I've give general future plans before going deep into the specifics.
+Here is the general idea, and then I'll give general future plans before going deep into the specifics.
 
 ## The General Idea
 
@@ -188,6 +190,10 @@ Walls are completely impenetrable to animals. One day there may be an option to 
 
 
 #### Draw Box Walls?
+
+
+![screenshot showing little fields divided by walls](screenshot2.png)
+
 
 If you have chosen to allow walls then you can also pick either (or neither) of two pre-designed wall configurations. The first one is "Box Walls" This means you'd like walls to be placed which divide the whole board into small square fields. Imagine a series of paddocks, with no gates between them. It effectively means you can run many evolutions in parallel.
 
