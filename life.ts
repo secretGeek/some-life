@@ -6,7 +6,6 @@ var causeOfDeathNatural:boolean[] = [];
 var deathsToTrack:number = 100; //number of recent deaths to keep track of for stats reasons.
 
 // what is the display size of a baby (relative to an adult) (e.g. 10% of adult size, then 0.1)
-const babySize = 0.3 
 
 //Feature to consider:
 // walls
@@ -31,7 +30,7 @@ function draw2() {
     }
 
     for(let cell of world.Cells){
-        if (world.Settings.IsAlwaysSummer || world.ItIsSummer) cell.addEnergy(world.Settings.EnergyRate);
+        if (world.Settings.IsAlwaysSummer || world.ItIsSummer) cell.addEnergy(world.Settings.EnergyRate,"flow");
         drawCell(world, cell);
     }
     
@@ -66,35 +65,29 @@ function draw2() {
 }
 
 class Wall {
-    constructor(
-        height:number,
-    ) {
+    constructor(height:number) {
         this.Height = height;
-        
     }
     Height: number;
 }
 class World {
     InjectWall(col: number, row: number) {
         var c = this.getCell(col, row);
+        c.Wall = new Wall(10);
         if (c.Animal) {
             if (c.Animal.Alive) {
                 c.Animal.Alive = false;
                 c.Animal.NaturalCauses = false;
-                //Hardly natural causes when you get a wall dropped on your head is it.
+                c.Animal.Log("Dropped wall on head", c.Wall.Height);
+                // Hardly natural causes when you get a wall dropped on your head is it.
             }
         }
-        c.Wall = new Wall(10);
     }
     getCellAtXY(x: number, y: number):Cell {
         let column = Math.floor(x / this.WidthOfCell);
         let row = Math.floor(y/this.HeightOfCell);
-        //alert("col: " + column + " row: " + row);
         var c = this.getCell(column, row);
-        //
         return c;
-        //if (c.Animal == null) alert('No animal        ')
-        //throw new Error("Method not implemented.");
     }
     constructor(
         canvasWidth:number,
@@ -119,7 +112,8 @@ class World {
         console.log("...or keep # cols and set rows to: " + ((this.CanvasHeight/this.CanvasWidth) * this.Columns));
 
         if (this.Settings.DrawBoxWalls) {
-            //Draw a grid!
+            // Draw a grid!
+
             for(let x = 0; x < this.Columns / this.Settings.BoxWallSize; x ++ ){
                 for(let y = 0; y < this.Rows; y++) {
                     this.InjectWall(x*this.Settings.BoxWallSize,y);
@@ -131,6 +125,28 @@ class World {
                     this.InjectWall(x,y*this.Settings.BoxWallSize);
                 }
             }
+
+        } else if (this.Settings.DrawCorridor) {
+
+            // Draw a series of walls that create one long winding corridor
+
+            // outer square
+            for(let x = 0; x < this.Columns; x ++ ){
+                this.InjectWall(x, 0);
+                //this.InjectWall(x, this.Rows-1);
+            }
+
+            for(let y = 0; y < this.Rows; y ++ ){
+                this.InjectWall(0, y);
+                //this.InjectWall(this.Columns - 1, y);
+            }
+
+            for(let x = 1; x < this.Columns/2; x ++ ){
+                for(let y = (x%2)+1; y < this.Rows - ( (x+1) % 2  ); y ++ ){
+                    this.InjectWall(x*2, y);
+                }
+            }
+            
         }
 
         this.SeasonLength = Math.floor(this.Settings.InitialSeasonLength);    
@@ -220,7 +236,7 @@ class Cell {
     }
     color():string {
         if (this.Wall) {
-            return `rgb(210,200,200)`;    
+            return `rgb(120,110,110)`;    
         }
         return `hsla(120, 69%, ${Math.floor((this.Energy*0.4)+5)}%, 0.9)`;
     }
@@ -229,10 +245,16 @@ class Cell {
     Energy:number;
     Animal:Animal;
     Wall: Wall;
-    addEnergy(amount:number):number {
+    log:string[] = [];
+    Log(event:string, amount:number){
+        if (!world.Settings.VerboseLog) return;
+        this.log.push(`${event}: ${amount}`);
+    }
+    addEnergy(amount:number, reason:string):number {
         let initialEnergy = this.Energy;
         //cannot be less than zero, cannot be greater than 100.
         this.Energy = Math.max(0, Math.min(100, this.Energy+amount));
+        this.Log(reason, amount);
         return (this.Energy - initialEnergy); //how much difference did it make;
     }
 }
@@ -269,7 +291,7 @@ class Animal {
         // energy taken to move depends on our current "mass" which is our stored energy.
         let movingEnergy = this.calcMovingEnergy();
         let weMoved = false;
-        let standingStillEnergy = 3;
+        let standingStillEnergy = world.Settings.StandingStillEnergy;
 
         if (bestNeighbor == currentTile 
             || bestNeighbor.Energy > movingEnergy) {
@@ -281,7 +303,7 @@ class Animal {
                 currentTile = bestNeighbor;
             } else {
                 // didn't move, but standing still takes energy.
-                this.incEnergy(standingStillEnergy * -1)
+                this.incEnergy(standingStillEnergy * -1,"standing still")
             }
             
             //woah, moving or standing still... it wiped us out!
@@ -296,11 +318,11 @@ class Animal {
             }
 
             //and you can't eat more than the cell can give you!
-            munchAmount = -1 * bestNeighbor.addEnergy(-1 * munchAmount);
+            munchAmount = -1 * bestNeighbor.addEnergy(-1 * munchAmount, "munched");
 
             //console.log(`munch amount: ${munchAmount}`);
             //this.Energy += munchAmount;
-            this.incEnergy(munchAmount);
+            this.incEnergy(munchAmount,"ate grass");
 
             if (this.Energy > (this.Genes.MaxEnergy*world.Settings.EnergyUpscaleFactor)) {
                 console.log(`I have more energy than I thought possible! munched:${munchAmount} new_energy:${this.Energy} max:${this.Genes.MaxEnergy}`);
@@ -309,7 +331,7 @@ class Animal {
             //standing still...
             //how much does that cost?
             
-            this.incEnergy(standingStillEnergy * -1)
+            this.incEnergy(standingStillEnergy * -1, "standing still")
 
             if (!this.Alive) return;
         }
@@ -335,7 +357,7 @@ class Animal {
         bestNeighbor.Animal = this;
         this.Col = bestNeighbor.Col;
         this.Row = bestNeighbor.Row;
-        this.incEnergy(movingEnergy * -1);
+        this.incEnergy(movingEnergy * -1, `moved with energy ${this.Energy}`);
     }
 
     calcMovingEnergy() {
@@ -352,6 +374,7 @@ class Animal {
             if (t.Animal && !t.Wall  // empty
                 && t.Energy > movingEnergy // worth moving to
                 && t.Energy > bestTile.Energy // best i've seen
+                && t.Animal.Alive
                 && t.Animal.Energy < fightEnergy  // wimp
                 ) {
                 bestTile = t;
@@ -361,7 +384,7 @@ class Animal {
         if (bestTile != currentTile){
             
             let threatAmount = this.Energy * (this.Genes.ThreatEnergy / 200);
-            if (bestTile.Animal.threaten(threatAmount)) {
+            if (bestTile.Animal.Threaten(this, threatAmount)) {
                 //they listened to the threat and they retreated (or perhaps there was nowhere to go).
                 //console.log("scared them");   
                 if (bestTile.Animal == null) {
@@ -370,7 +393,7 @@ class Animal {
                 return true;
             } else {
                 //console.log("HITTING");
-                this.hit(bestTile.Animal, threatAmount);
+                this.Hit(bestTile.Animal, threatAmount);
                 return false;
             }
         }
@@ -378,17 +401,19 @@ class Animal {
         return false;
     }
     
-    hit(targetAnimal:Animal, hitEnergy:number){
+    Hit(targetAnimal:Animal, hitEnergy:number){
         //this.Energy -= ;
-        this.incEnergy(hitEnergy/-2)
-        targetAnimal.IGotHit += 5;
-        targetAnimal.incEnergy(hitEnergy * -2);
+        this.incEnergy(hitEnergy/-2,"hit someone")
+        targetAnimal.IGotHit(hitEnergy*2);
+        targetAnimal.incEnergy(hitEnergy * -2,"got hit");
     }
     
-    incEnergy(amount:number) {
+    incEnergy(amount:number, reason:string) {
         this.Energy += amount;
+        this.Log(reason,amount);
         if (this.Energy <= 0){
             this.Alive = false;
+            this.Log("Died!",0);
             //console.log("Died of exhaustion.");
             this.NaturalCauses = false;
             causeOfDeathNatural.push(false);
@@ -396,8 +421,8 @@ class Animal {
         } 
     }
 
-    threaten(threatAmount:number):boolean{
-        //return true if the threat IS solid and respected.
+    Threaten(aggressor:Animal, threatAmount:number):boolean{
+        //return true if the threat IS solid and respected (and we either had nowhere to run or we moved).
         //return false if we LAUGH in the face of this threat
         //let threatWeCanStand = this.Energy / 2; //todo -- better function using our genes
         let threatWeCanStand = this.Energy * (this.Genes.NotAfraid / 200); 
@@ -407,8 +432,13 @@ class Animal {
         let neighborCells = world.getNeighborCells(this.Col, this.Row);
         let bestNeighbor = currentTile;
         let noEscape = true;
+
+        // wonder if i can find the angle from the aggressor to me
+        // and find the person who is further away...
+        
         for(var t of neighborCells) {
-            
+            //let d = distance(aggressor, t);
+
             if (!t.Animal && !t.Wall){
                 noEscape = false;
                 if (t.Energy > bestNeighbor.Energy) {
@@ -481,8 +511,12 @@ class Animal {
         let child = world.getCell(bestCell.Col, bestCell.Row).Animal;
         child.Generation = (this.Generation + potentialMate.Generation)/2 + 1;
         child.Genes = Crossover(this.Genes, potentialMate.Genes);
-        //child.Energy = this.EnergyToChild;
-        this.incEnergy(this.Genes.EnergyToChild * -1);
+        child.Log(`Born from ${this.Id} and`, potentialMate.Id);
+        child.Log(`Born with energy ${this.Genes.EnergyToChild}`, child.Energy);
+        this.Log("Child with:",potentialMate.Id);
+        potentialMate.Log("Fathered Child with:",this.Id);
+        
+        this.incEnergy(this.Genes.EnergyToChild * -1,"gave birth");
     }
     AdvertisedEnergy() {
         //todo: consider displaying a different amount of energy.
@@ -491,18 +525,21 @@ class Animal {
     }
 
     addAge(tickDuration: number) {
+        //if (!this.Alive) return;
+
         this.Age = Math.min(this.MaxAge, this.Age+tickDuration);
         
         //babySize is a fraction, e.g. 0.3, so that babies are not a tiny spec, but start at 30% of final size.
-        this.Size = babySize + ((1.0 - babySize)*(this.Age / this.MaxAge)); //from 0..1.0
+        this.Size = world.Settings.BabySize + ((1.0 - world.Settings.BabySize)*(this.Age / this.MaxAge)); //from 0..1.0
         //if (this.Age >= this.MaxAge) {
-        if (this.Age >= this.MaxAge) {
+        if (this.Age >= this.MaxAge && this.Alive) {
             this.Alive = false;
-            //console.log("Died of old age.");
+            this.Log(`Died of old age, with energy ${this.Energy} at`, this.Age);
             this.NaturalCauses = true;
             causeOfDeathNatural.push(true);
             while(causeOfDeathNatural.length > deathsToTrack) causeOfDeathNatural.splice(0,1);
         }
+
         if (!this.Alive) {
             this.DeadDuration = Math.min(world.Settings.MaxDeadDuration, this.DeadDuration+tickDuration);
         }
@@ -517,7 +554,7 @@ class Animal {
         this.Id = newId();
         this.Genes = getDefaultGenes();
         this.MaxAge = Math.floor((world.Settings.MaxAge * 0.80) + rando(world.Settings.MaxAge * 0.4));
-        console.log("MAX AGE: " + this.MaxAge);
+        //console.log("MAX AGE: " + this.MaxAge);
         if (this.Age >= this.MaxAge) {
             this.Age = this.MaxAge - 1;
             if (this.Age < 0) this.Age = 0;
@@ -536,12 +573,20 @@ class Animal {
             //console.log(color);
             return color;
         }
-        if (this.IGotHit > 0){
-            this.IGotHit--;
+        if (this.iGotHit > 0){
+            this.iGotHit--;
             return `rgba(0,0,255,1)`; //flash of bright blue
         }
         return `hsla(${Math.floor(this.Genes.Hugh*3.6)}, ${Math.floor(this.Genes.Saturation)}%, ${Math.floor(this.Genes.Lightness*0.6)}%, 0.9)`;
         //return 'rgba(12,100,200, 0.9)';
+    }
+    log:string[] = [];
+    IGotHit(energy:number) {
+        this.iGotHit += 5;
+    }
+    Log(event:string, amount:number){
+        if (!world.Settings.VerboseLog) return;
+        this.log.push(`${event}: ${amount}`);
     }
     Generation:number = 0;
     Col:number;
@@ -552,12 +597,18 @@ class Animal {
     Alive:boolean = true;
     NaturalCauses:boolean = null; // did we die from natural causes or other?
     DeadDuration:number = 0; //if dead... how long have they been dead?
-    IGotHit:number = 0;
+    iGotHit:number = 0;
     Energy:number = 100;
     Id:number;
     Genes:Genes;
 }
 
+function distance(a1:Animal, a2:Animal) {
+    //distance from one animal to another
+    let yDiff = Math.abs(a1.Row - a2.Row);
+    let xDiff = Math.abs(a1.Col - a2.Col);
+
+}
 function drawAnimal(world:World, animal:Animal) {
     ctx.fillStyle = animal.color();
     ctx.beginPath();
@@ -671,6 +722,17 @@ if (!paused) {
     addClass(".set_the_controls", "for_the");
 }
 
+}
+
+function showHideStats(x:any) {
+    let stats = $id('stats');
+    if (stats.classList.contains('hidden')) {
+        stats.classList.remove('hidden');
+        x.value = "stats -";
+    } else {
+        stats.classList.add('hidden');
+        x.value = "stats +";
+    }
 }
 
 var paused = false;
@@ -835,6 +897,8 @@ class Settings {
     MaxDeadDuration:number = 1; //How long does it take for animals bodies to break down
     // How much energy does grass receive on each tick?
     EnergyRate:number = 5.1; 
+    // How much energy does it take an animal to stand still for one tick?
+    StandingStillEnergy:number = 2;
     ConsiderViolence:boolean = true;
     // How many 'years' go by for every tick. (age is specified in years, not ticks.)
     TickDuration:number = 0.1; 
@@ -843,21 +907,25 @@ class Settings {
     // This is a consequence of genes being limited between 0 and 100, but the practical range discovered experimentally being quite different
     EnergyUpscaleFactor:number = 7;
     
+    // babySize is a fraction, e.g. 0.3, so that babies are not a tiny spec, but start at 30% of final size.
+    BabySize:number=0.3;
     Mutate1:number = 100;
     Mutate2:number = 100;
     MutateDivisor:number = 20;
     AllowWalls:boolean = true;
     DrawBoxWalls:boolean = true;
+    DrawCorridor:boolean = true;
     BoxWallSize:number = 8;
     // How many milliseconds to wait between rendering each frame
     Delay:number=0;
+    VerboseLog:boolean = false;
 }
 
 /* end world parameters */
 
 function populateGeneForm(id:string){
     var genes = getDefaultGenes();
-    var ss = "<h1>Default (starting) gene values</h1><br />";
+    var ss = "<h2>Default (starting) gene values</h2>";
     for(var prop of Object.getOwnPropertyNames(genes)) {
         ss+=`<span class='label'>${toWords(prop)}</span><input type='text' id='${prop}' value='${genes[prop]}' /><br />`;
     }
@@ -920,6 +988,8 @@ document.addEventListener("DOMContentLoaded", function () {
     $id('go').addEventListener('click', function() {
         readGeneForm('geneForm');
         removeClass('.startHidden', 'startHidden');
+        $id('stats').classList.add('hidden');
+        //showHideStats($id('showHideStats'));
         
         canvas = <HTMLCanvasElement>document.getElementById("html-canvas");
         canvas.width = canvas.clientWidth;
@@ -936,17 +1006,20 @@ document.addEventListener("DOMContentLoaded", function () {
         $id('go').classList.add('hidden');
 
         canvas.addEventListener('mousedown', function(e) { 
+            //if (paused) return;
             mouseDown = true;
             placeWall(canvas, e, true);
         }, false);
 
         canvas.addEventListener('mouseup', function(e) { 
+            //if (paused) return;
             mouseDown = false;
             //getCursorPosition(canvas, e);
         }, false);
 
 
         canvas.addEventListener('mousemove', function(e) { 
+            
             if (mouseDown){
                 placeWall(canvas, e, false);
             }
@@ -964,12 +1037,24 @@ function placeWall(canvas:HTMLCanvasElement, event, toggler:boolean) {
     const y = event.clientY - rect.top;
     var c = world.getCellAtXY(x,y);
     console.log(x,y,c);
-    if (world.Settings.AllowWalls) {
-        if (!c.Wall) {
-            world.InjectWall(c.Col, c.Row);
-        } else {
-            if (toggler) c.Wall = null;
-            //
+    if (paused) {
+        mouseDown = false;
+        if (toggler) {
+            console.log(c);
+            if (c.Animal && c.Animal.log.length > 0) alert(JSON.stringify(c.Animal.log, null, ' ')) 
+            else if (c.Animal) alert(JSON.stringify(c.Animal, null, ' ')) 
+            else if (c.log.length > 0) alert(JSON.stringify(c.log, null, ' ')) 
+            else alert(JSON.stringify(c, null, ' '));
         }
+        return;
+    } 
+    
+    if (!world.Settings.AllowWalls) return;
+
+    if (!c.Wall) {
+        world.InjectWall(c.Col, c.Row);
+    } else {
+        if (toggler) c.Wall = null;
+        //
     }
 }
