@@ -358,7 +358,7 @@ var Animal = /** @class */ (function () {
         }
         if (bestTile != currentTile) {
             var threatAmount = this.Energy * (this.Genes.ThreatEnergy / 200);
-            if (bestTile.Animal.Threaten(this, threatAmount)) {
+            if (bestTile.Animal.Threaten(this, threatAmount, cells)) {
                 //they listened to the threat and they retreated (or perhaps there was nowhere to go).
                 //console.log("scared them");   
                 if (bestTile.Animal == null) {
@@ -368,13 +368,13 @@ var Animal = /** @class */ (function () {
             }
             else {
                 //console.log("HITTING");
-                this.Hit(bestTile.Animal, threatAmount);
+                this.HitAnimal(bestTile.Animal, threatAmount);
                 return false;
             }
         }
         return false;
     };
-    Animal.prototype.Hit = function (targetAnimal, hitEnergy) {
+    Animal.prototype.HitAnimal = function (targetAnimal, hitEnergy) {
         //this.Energy -= ;
         this.incEnergy(hitEnergy / -2, "hit someone");
         targetAnimal.IGotHit(hitEnergy * 2);
@@ -393,7 +393,7 @@ var Animal = /** @class */ (function () {
                 causeOfDeathNatural.splice(0, 1);
         }
     };
-    Animal.prototype.Threaten = function (aggressor, threatAmount) {
+    Animal.prototype.Threaten = function (aggressor, threatAmount, aggressorsNeighbors) {
         //return true if the threat IS solid and respected (and we either had nowhere to run or we moved).
         //return false if we LAUGH in the face of this threat
         //let threatWeCanStand = this.Energy / 2; //todo -- better function using our genes
@@ -406,11 +406,20 @@ var Animal = /** @class */ (function () {
         var noEscape = true;
         // wonder if i can find the angle from the aggressor to me
         // and find the person who is further away...
+        var bestEscapeTile = null;
         for (var _i = 0, neighborCells_1 = neighborCells; _i < neighborCells_1.length; _i++) {
             var t = neighborCells_1[_i];
-            //let d = distance(aggressor, t);
             if (!t.Animal && !t.Wall) {
                 noEscape = false;
+                if (!aggressorsNeighbors.includes(t)) {
+                    //escape
+                    if (bestEscapeTile == null) {
+                        bestEscapeTile = t;
+                    }
+                    else if (t.Energy > bestEscapeTile.Energy) {
+                        bestEscapeTile = t;
+                    }
+                }
                 if (t.Energy > bestNeighbor.Energy) {
                     bestNeighbor = t;
                 }
@@ -420,6 +429,11 @@ var Animal = /** @class */ (function () {
             return true;
         if (bestNeighbor == currentTile)
             return false;
+        //Don't go to the tile with the best energy... go to:
+        // the best tile that is away from the aggressor *and* has the best energy.
+        if (bestEscapeTile != null)
+            bestNeighbor = bestEscapeTile;
+        this.Log("Ran from threat " + threatAmount + " by " + aggressor.Id + " to", bestNeighbor.Energy);
         this.moveTo(currentTile, bestNeighbor, this.calcMovingEnergy());
         return true;
     };
@@ -482,8 +496,8 @@ var Animal = /** @class */ (function () {
         child.Genes = Crossover(this.Genes, potentialMate.Genes);
         child.Log("Born from " + this.Id + " and", potentialMate.Id);
         child.Log("Born with energy " + this.Genes.EnergyToChild, child.Energy);
-        this.Log("Child with:", potentialMate.Id);
-        potentialMate.Log("Fathered Child with:", this.Id);
+        this.Log("Child with", potentialMate.Id);
+        potentialMate.Log("Fathered Child with", this.Id);
         this.incEnergy(this.Genes.EnergyToChild * -1, "gave birth");
     };
     Animal.prototype.AdvertisedEnergy = function () {
@@ -539,11 +553,6 @@ var Animal = /** @class */ (function () {
     };
     return Animal;
 }());
-function distance(a1, a2) {
-    //distance from one animal to another
-    var yDiff = Math.abs(a1.Row - a2.Row);
-    var xDiff = Math.abs(a1.Col - a2.Col);
-}
 function drawAnimal(world, animal) {
     ctx.fillStyle = animal.color();
     ctx.beginPath();
@@ -810,13 +819,13 @@ var Settings = /** @class */ (function () {
         this.IsAlwaysSummer = false;
         this.InitialSeasonLength = 1; // seasons are initially this length (unless 'is always summer' is true)
         this.DoSeasonsGetLonger = true;
-        this.MaxSeasonLength = 220;
+        this.MaxSeasonLength = 120;
         this.MaxAge = 100; //How long do animals live
-        this.MaxDeadDuration = 1; //How long does it take for animals bodies to break down
+        this.MaxDeadDuration = 0.2; //How long does it take for animals bodies to break down
         // How much energy does grass receive on each tick?
-        this.EnergyRate = 5.1;
+        this.EnergyRate = 4.1;
         // How much energy does it take an animal to stand still for one tick?
-        this.StandingStillEnergy = 2;
+        this.StandingStillEnergy = 2.5;
         this.ConsiderViolence = true;
         // How many 'years' go by for every tick. (age is specified in years, not ticks.)
         this.TickDuration = 0.1;

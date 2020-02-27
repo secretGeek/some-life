@@ -199,13 +199,13 @@ If you have chosen to allow walls then you can also pick either (or neither) of 
 
 #### Box Wall Size
 
-If you choose "Draw Box Walls" you also get to decide how many squares will each little field should be.
+If you choose "Draw Box Walls" you also get to decide how many squares wide (and tall) each little field should be.
 
 #### Draw Corridor?
 
 Instead of drawing box walls you might go for "Draw Corridor".
 
-THis is a wall configuration that turns the entire field into one very long, twisty corridor, one cell wide. No one can get past anyone else. It's an interesting layout to observe.
+This is a wall configuration that turns the entire field into one very long, twisty corridor, a single cell wide. No one can get past anyone else. It's an interesting layout to observe.
 
 #### Delay (milliseconds)
 
@@ -349,8 +349,16 @@ A haploid configuration seems to be adequate for most genetic algorithms and sim
 
 In this game each gene is equally likely to come from either parent. This is also different to life on earth, where adjacant DNA is likely to come from the same parent, up until a "crossover" event at which point DNA sequences will then be from the other parent. (It is currenty estimated that there are between 1 and 2 crossover events per chromosome, in humans). Crossover is often used in simulated life, and could be useful here, particularly where behavior is encoded in more than one gene. If we would like some adjacent genes to "travel together" across generations, then cross over would be better than just randomly picking a gene from either parent.
 
+# Blended phenotypes
+
+When discussing diploid genes we usually use Mendel's model, where there are two genes in a genotype, only the "dominant" one is displayed, this is the "phenotype". But there is also a concept called "incomplete dominance" where both genes may be active, resulting in (well, resulting in pretty much anything imaginable, but for simplicity we say it results in) a mixture of both the expected result from each gene.
+
+![incomplete dominance can result in a blended result](/incomplete_dominance.png)
 
 
+Whether this is biologically accurate or not, it's certainly an easy type of inheritance to implement in the current model. Because every gene is represented as a number between 1 and 100, I can just average the two numbers to produce a result. This option can be enabled by a "blended inheritance" world setting.
+
+([Further reading on incomplete dominance](https://www.khanacademy.org/science/high-school-biology/hs-classical-genetics/hs-non-mendelian-inheritance/a/multiple-alleles-incomplete-dominance-and-codominance))
 
 
 ## [play the game now, live](https://secretgeek.github.io/some-life/)

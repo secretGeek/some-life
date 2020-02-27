@@ -384,7 +384,7 @@ class Animal {
         if (bestTile != currentTile){
             
             let threatAmount = this.Energy * (this.Genes.ThreatEnergy / 200);
-            if (bestTile.Animal.Threaten(this, threatAmount)) {
+            if (bestTile.Animal.Threaten(this, threatAmount, cells)) {
                 //they listened to the threat and they retreated (or perhaps there was nowhere to go).
                 //console.log("scared them");   
                 if (bestTile.Animal == null) {
@@ -393,7 +393,7 @@ class Animal {
                 return true;
             } else {
                 //console.log("HITTING");
-                this.Hit(bestTile.Animal, threatAmount);
+                this.HitAnimal(bestTile.Animal, threatAmount);
                 return false;
             }
         }
@@ -401,7 +401,7 @@ class Animal {
         return false;
     }
     
-    Hit(targetAnimal:Animal, hitEnergy:number){
+    HitAnimal(targetAnimal:Animal, hitEnergy:number){
         //this.Energy -= ;
         this.incEnergy(hitEnergy/-2,"hit someone")
         targetAnimal.IGotHit(hitEnergy*2);
@@ -421,7 +421,7 @@ class Animal {
         } 
     }
 
-    Threaten(aggressor:Animal, threatAmount:number):boolean{
+    Threaten(aggressor:Animal, threatAmount:number, aggressorsNeighbors:Cell[]):boolean{
         //return true if the threat IS solid and respected (and we either had nowhere to run or we moved).
         //return false if we LAUGH in the face of this threat
         //let threatWeCanStand = this.Energy / 2; //todo -- better function using our genes
@@ -435,20 +435,34 @@ class Animal {
 
         // wonder if i can find the angle from the aggressor to me
         // and find the person who is further away...
-        
+        let bestEscapeTile:Cell = null;
         for(var t of neighborCells) {
-            //let d = distance(aggressor, t);
-
+            
             if (!t.Animal && !t.Wall){
                 noEscape = false;
+                if (!aggressorsNeighbors.includes(t)) {
+                    //escape
+                    if (bestEscapeTile == null) {
+                        bestEscapeTile = t;
+                    } else if (t.Energy > bestEscapeTile.Energy) {
+                        bestEscapeTile = t;
+                    }
+                }
+
                 if (t.Energy > bestNeighbor.Energy) {
                     bestNeighbor = t;
                 } 
             }
         }
 
+
         if (noEscape) return true;
         if (bestNeighbor == currentTile) return false;
+
+        //Don't go to the tile with the best energy... go to:
+        // the best tile that is away from the aggressor *and* has the best energy.
+        if (bestEscapeTile != null) bestNeighbor = bestEscapeTile;
+        this.Log(`Ran from threat ${threatAmount} by ${aggressor.Id} to`, bestNeighbor.Energy);
 
         this.moveTo(currentTile, bestNeighbor, this.calcMovingEnergy());
 
@@ -513,8 +527,8 @@ class Animal {
         child.Genes = Crossover(this.Genes, potentialMate.Genes);
         child.Log(`Born from ${this.Id} and`, potentialMate.Id);
         child.Log(`Born with energy ${this.Genes.EnergyToChild}`, child.Energy);
-        this.Log("Child with:",potentialMate.Id);
-        potentialMate.Log("Fathered Child with:",this.Id);
+        this.Log("Child with",potentialMate.Id);
+        potentialMate.Log("Fathered Child with",this.Id);
         
         this.incEnergy(this.Genes.EnergyToChild * -1,"gave birth");
     }
@@ -603,12 +617,6 @@ class Animal {
     Genes:Genes;
 }
 
-function distance(a1:Animal, a2:Animal) {
-    //distance from one animal to another
-    let yDiff = Math.abs(a1.Row - a2.Row);
-    let xDiff = Math.abs(a1.Col - a2.Col);
-
-}
 function drawAnimal(world:World, animal:Animal) {
     ctx.fillStyle = animal.color();
     ctx.beginPath();
@@ -891,14 +899,14 @@ class Settings {
     IsAlwaysSummer:boolean = false;
     InitialSeasonLength:number = 1; // seasons are initially this length (unless 'is always summer' is true)
     DoSeasonsGetLonger:boolean = true;
-    MaxSeasonLength:number = 220;
+    MaxSeasonLength:number = 120;
 
     MaxAge:number = 100; //How long do animals live
-    MaxDeadDuration:number = 1; //How long does it take for animals bodies to break down
+    MaxDeadDuration:number = 0.2; //How long does it take for animals bodies to break down
     // How much energy does grass receive on each tick?
-    EnergyRate:number = 5.1; 
+    EnergyRate:number = 4.1; 
     // How much energy does it take an animal to stand still for one tick?
-    StandingStillEnergy:number = 2;
+    StandingStillEnergy:number = 2.5;
     ConsiderViolence:boolean = true;
     // How many 'years' go by for every tick. (age is specified in years, not ticks.)
     TickDuration:number = 0.1; 
