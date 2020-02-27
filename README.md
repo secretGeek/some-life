@@ -355,6 +355,7 @@ When discussing diploid genes we usually use Mendel's model, where there are two
 
 ![incomplete dominance can result in a blended result](/incomplete_dominance.png)
 
+In the diagram above I've used Comic Sans MS font, to indicate that this is probably a drastic over-simplification of what can really occur in a 'incomplete dominance' scenarios.
 
 Whether this is biologically accurate or not, it's certainly an easy type of inheritance to implement in the current model. Because every gene is represented as a number between 1 and 100, I can just average the two numbers to produce a result. This option can be enabled by a "blended inheritance" world setting.
 
